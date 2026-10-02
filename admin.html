@@ -78,6 +78,7 @@
       <div class="subRow">
         <button id="btnIdle">待機画面（QR・参加状況）へ</button>
         <button id="btnCancel" class="danger">この問題をやり直し</button>
+        <button id="btnPrev">◀ 前の問題に戻る</button>
         <button id="btnBackTo1" class="danger">第1問に戻す（チームはそのまま）</button>
         <label style="margin-left:auto"><input type="checkbox" id="kbd" checked> スペースキーでスタート/ストップ</label>
       </div>
@@ -303,6 +304,8 @@ function baseUrl() {
     $('btnStop').disabled = s.status !== 'open';
     $('btnStart').textContent = '▶ 第' + (s.status === 'open' ? s.roundNo : s.roundNo + 1) + '問 スタート（演奏開始）';
     $('btnCancel').disabled = s.status === 'idle';
+    $('btnPrev').disabled = s.status === 'open' || s.roundNo < 1;
+    $('btnPrev').textContent = s.roundNo >= 1 && s.status !== 'open' ? '◀ 前の問題に戻る（次を第' + s.roundNo + '問に）' : '◀ 前の問題に戻る';
     $('btnBackTo1').disabled = s.status === 'open' || (s.roundNo === 0 && s.status === 'idle');
 
     const ranking = computeRanking(buzzes, s.startAt, teams);
@@ -387,6 +390,17 @@ function baseUrl() {
     u['state/startAt'] = 0; u['state/endAt'] = 0;
     u['buzzes/' + n] = null; u['history/' + n] = null;
     ROOT.update(u).catch(fail);
+  };
+  $('btnPrev').onclick = function () {
+    if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
+    const n = state.roundNo;
+    if (n < 1) return;
+    if (!confirm('第' + n + '問の記録を消して、次のスタートを「第' + n + '問」にします。\n（参加チームはそのまま残ります）\n\nよろしいですか？')) return;
+    const u = {};
+    u['state/roundNo'] = n - 1; u['state/status'] = 'idle'; u['state/reveal'] = '';
+    u['state/startAt'] = 0; u['state/endAt'] = 0;
+    u['buzzes/' + n] = null; u['history/' + n] = null;
+    ROOT.update(u).then(function () { toast('次のスタートは第' + n + '問です'); }, fail);
   };
   $('btnBackTo1').onclick = function () {
     if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
