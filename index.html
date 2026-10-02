@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>イントロクイズ - 回答</title>
+<title>イントロドン！ - 回答</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <style>
@@ -47,7 +47,7 @@
 </head>
 <body>
   <header>
-    <span id="title">イントロクイズ</span>
+    <span id="title">イントロドン！</span>
     <span id="conn" hidden>再接続中…</span>
     <span id="teamLabel"></span>
   </header>
@@ -73,7 +73,7 @@
 
 <script>
 /* =========================================================
- * イントロクイズ 共通設定（Firebase Realtime Database）
+ * イントロドン！ 共通設定（Firebase Realtime Database）
  *
  * Firebase プロジェクト: intro-quiz-bf88f（設定済み）
  * Firebase コンソール →（歯車）プロジェクトの設定 → マイアプリ →
@@ -92,7 +92,7 @@ const FIREBASE_CONFIG = {
 /* ▲▲▲ ここまで ▲▲▲ */
 
 const TEAM_COUNT = 20;
-const DEFAULT_TITLE = 'イントロクイズ大会';
+const DEFAULT_TITLE = 'イントロドン！';
 
 if (!/^https:\/\//.test(FIREBASE_CONFIG.databaseURL || '')) {
   document.addEventListener('DOMContentLoaded', function () {
@@ -238,7 +238,7 @@ function baseUrl() {
       else { btn.textContent = '終了'; msg = '受付終了<br><small>次の問題をお待ちください</small>'; }
       if (state.reveal) msg += '<br><small>正解：' + esc(state.reveal) + '</small>';
     } else if (state.status === 'ready') {
-      btn.textContent = 'まもなく'; msg = 'まもなくクイズが始まります！<br><small>演奏が始まるとボタンが赤くなります</small>';
+      btn.textContent = 'まもなく'; msg = 'まもなくイントロドン！が始まります！<br><small>演奏が始まるとボタンが赤くなります。<br>イントロでわかったら「わかった！」を押してください</small>';
     } else if (state.status === 'finished') {
       btn.textContent = '終了'; msg = 'クイズは終了しました<br><small>ご参加ありがとうございました！</small>';
     } else {

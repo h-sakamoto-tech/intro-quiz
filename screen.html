@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>イントロクイズ - スクリーン</title>
+<title>イントロドン！ - スクリーン</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -43,42 +43,45 @@
 
   /* ===== 出題中 ===== */
   #live { flex: 1; display: flex; flex-direction: column; padding: 1.5vh 2.5vw 2vh; min-height: 0; position: relative; }
-  #hero { display: flex; align-items: center; gap: 2.5vw; height: 15vh; }
-  #roundNo { font-size: 11vh; font-weight: 900; line-height: 1; letter-spacing: .02em;
+  #hero { display: flex; align-items: center; gap: 2.5vw; height: 20vh; }
+  #roundNo { font-size: 17vh; font-weight: 900; line-height: 1; letter-spacing: .02em;
     background: linear-gradient(180deg, #fff6b0 0%, #ffcc33 45%, #ff7a00 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
     filter: drop-shadow(0 0 2.2vh rgba(255,170,0,.55)); }
-  #badge { font-size: 3.2vh; font-weight: 900; padding: 1vh 2.2vw; border-radius: 99px; white-space: nowrap; }
+  #badge { font-size: 4.4vh; font-weight: 900; padding: 1.2vh 2.6vw; border-radius: 99px; white-space: nowrap; }
   #badge.open { background: linear-gradient(90deg, #ff2d55, #ff7a00); box-shadow: 0 0 3vh rgba(255,60,60,.6); animation: blink 1s infinite; }
   #badge.closed { background: #3c4366; }
   @keyframes blink { 50% { opacity: .55; } }
-  #timer { margin-left: auto; font-size: 9vh; font-weight: 900; font-variant-numeric: tabular-nums;
+  #timer { margin-left: auto; font-size: 13vh; font-weight: 900; font-variant-numeric: tabular-nums;
     font-family: "SF Mono", Menlo, Consolas, monospace; text-shadow: 0 0 2vh rgba(120,180,255,.5); }
-  #timer small { font-size: 4vh; margin-left: .4vw; opacity: .7; }
+  #timer small { font-size: 5vh; margin-left: .4vw; opacity: .7; }
 
-  #tiles { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 12.6vh; gap: 1.4vh;
+  #tiles { --f: 1; --f1: 1; flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 12vh; gap: 1.4vh;
     align-content: start; margin-top: 1vh; }
   .tile { position: relative; border-radius: 1.6vh; padding: 3.6vh 1vw 1vh; display: flex; flex-direction: column; justify-content: center;
     background: linear-gradient(160deg, #1f2a5a, #141a3a); border: .25vh solid rgba(140,170,255,.25); overflow: hidden;
     animation: pop .5s cubic-bezier(.2,1.6,.4,1); }
-  .tile .rk { position: absolute; top: .7vh; left: .9vw; font-size: 2.4vh; font-weight: 900; opacity: .9; }
-  .tile .nm { font-size: 3.3vh; font-weight: 900; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tile .tm { font-size: 2.8vh; font-weight: 800; text-align: center; font-family: "SF Mono", Menlo, Consolas, monospace; color: #9fd0ff; }
+  .tile .rk { position: absolute; top: .7vh; left: .9vw; font-size: calc(2.4vh * var(--f)); font-weight: 900; opacity: .9; }
+  .tile .nm { font-size: calc(3.3vh * var(--f)); font-weight: 900; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .tm { font-size: calc(2.8vh * var(--f)); font-weight: 800; text-align: center; font-family: "SF Mono", Menlo, Consolas, monospace; color: #9fd0ff; }
   .tile.r1 { grid-column: span 2; grid-row: span 2; border: .5vh solid #ffe27a;
     background: linear-gradient(150deg, #ffd34d 0%, #ff9f1a 55%, #e25c00 100%); color: #2a1300;
     box-shadow: 0 0 4vh rgba(255,190,40,.7); animation: pop .6s cubic-bezier(.2,1.6,.4,1), glow 1.2s ease-in-out .6s infinite; }
-  .tile.r1 .rk { font-size: 5vh; top: 1.2vh; left: 1.4vw; }
-  .tile.r1 { padding-top: 7vh; }
-  .tile.r1 .nm { font-size: 7vh; }
-  .tile.r1 .tm { font-size: 5.5vh; color: #3a1800; }
-  .tile.r1 .mic { position: absolute; top: 1.4vh; right: 1.2vw; font-size: 2.6vh; font-weight: 900; background: #2a1300; color: #ffd34d;
+  .tile.r1 .rk { font-size: calc(5vh * var(--f1)); top: 1.2vh; left: 1.4vw; }
+  .tile.r1 { padding-top: calc(7vh * var(--f1)); }
+  .tile.r1 .nm { font-size: calc(7vh * var(--f1)); white-space: normal; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tile.r1 .tm { font-size: calc(5.5vh * var(--f1)); color: #3a1800; }
+  .tile.r1 .mic { position: absolute; top: 1.4vh; right: 1.2vw; font-size: calc(2.6vh * var(--f1)); font-weight: 900; background: #2a1300; color: #ffd34d;
     padding: .5vh 1.2vw; border-radius: 99px; }
   .tile.r2 { background: linear-gradient(150deg, #eef2f7, #9aa5b5); color: #1b2230; border-color: #fff; }
   .tile.r2 .tm, .tile.r3 .tm { color: inherit; }
   .tile.r3 { background: linear-gradient(150deg, #f0a46b, #a0522d); color: #2a1206; border-color: #ffc59a; }
   @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   @keyframes glow { 50% { box-shadow: 0 0 7vh rgba(255,210,60,1); } }
-  #waitMsg { grid-column: 1 / -1; grid-row: span 4; display: flex; align-items: center; justify-content: center; text-align: center;
-    font-size: 6vh; font-weight: 900; line-height: 1.5; animation: breathe 1.6s ease-in-out infinite; }
+  #tiles.m1 { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 28vh; --f: 1.6; --f1: 1.2; }
+  #tiles.m2 { grid-auto-rows: 17vh; --f: 1.2; --f1: 1.05; }
+  #tiles.m1 .tile .nm { white-space: normal; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  #waitMsg { grid-column: 1 / -1; grid-row: span 2; min-height: 55vh; display: flex; align-items: center; justify-content: center; text-align: center;
+    font-size: 9vh; font-weight: 900; line-height: 1.4; animation: breathe 1.6s ease-in-out infinite; }
   #waitMsg em { font-style: normal; color: #ff4b5c; }
   @keyframes breathe { 50% { opacity: .45; transform: scale(.97); } }
 
@@ -102,24 +105,28 @@
   @keyframes zoomIn { from { transform: scale(3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   @keyframes fadeOut { to { opacity: 0; } }
 
-  /* ===== まもなく開始 ===== */
-  #ready { flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; padding: 2vh 4vw; }
+  /* ===== ルール説明（まもなく開始） ===== */
+  #ready { flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; padding: 2vh 5vw; gap: 2.6vh; }
   #ready::before { content: ""; position: absolute; width: 250vmax; height: 250vmax; left: 50%; top: 50%; margin: -125vmax 0 0 -125vmax;
     background: repeating-conic-gradient(rgba(255,60,90,.10) 0 8deg, transparent 8deg 18deg); animation: spin 20s linear infinite; }
   #ready > * { position: relative; }
-  #ready .r1 { font-size: 7vh; font-weight: 900; letter-spacing: .2em; color: #fff; text-shadow: 0 0 3vh #ff2d55; animation: zoomIn .7s cubic-bezier(.2,1.8,.4,1) both; }
-  #ready .r2 { font-size: 13vh; font-weight: 900; line-height: 1.15; text-align: center;
+  #ready .rtop { display: flex; flex-direction: column; align-items: center; gap: 1.6vh; }
+  #ready .rlogo { font-size: 14vh; font-weight: 900; line-height: 1.05; white-space: nowrap;
     background: linear-gradient(180deg, #fff6b0, #ffcc33 45%, #ff6a00); -webkit-background-clip: text; background-clip: text; color: transparent;
-    filter: drop-shadow(0 0 4vh rgba(255,160,0,.7)); animation: zoomIn .7s cubic-bezier(.2,1.8,.4,1) .2s both, beat 1.4s ease-in-out 1s infinite; }
+    filter: drop-shadow(0 0 4vh rgba(255,160,0,.7)); animation: zoomIn .7s cubic-bezier(.2,1.8,.4,1) both, beat 1.4s ease-in-out 1s infinite; }
   @keyframes beat { 50% { transform: scale(1.04); } }
-  #ready .rule { margin-top: 3vh; font-size: 3.6vh; font-weight: 800; padding: 1.6vh 3vw; border-radius: 99px; background: rgba(255,255,255,.08); border: .3vh solid rgba(255,255,255,.2); }
-  #ready .rule em { font-style: normal; color: #ff4b5c; }
-  #ready .rteams { margin-top: 3vh; width: 100%; max-width: 150vh; }
-  #ready .rteams h3 { margin: 0 0 1.2vh; font-size: 2.6vh; text-align: center; opacity: .8; font-weight: 700; }
-  #readyChips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1vh; }
-  #readyChips .chip { font-size: 2.2vh; padding: 1vh .8vw; animation: none; }
+  #ready .rchip { font-size: 4.6vh; font-weight: 900; padding: 1.4vh 2.4vw; border-radius: 99px; white-space: nowrap;
+    background: linear-gradient(90deg, #ff2d55, #ff7a00); box-shadow: 0 0 3vh rgba(255,60,60,.6); animation: blink 1.2s infinite; }
+  #ready .rband { font-size: 4.6vh; font-weight: 800; }
+  #ready .rband b { font-size: 6vh; color: #7fe3ff; letter-spacing: .08em; text-shadow: 0 0 2.5vh rgba(80,200,255,.7); }
+  #ready .rules { list-style: none; margin: 0; padding: 2.6vh 3vw; display: flex; flex-direction: column; gap: 2.2vh; width: 100%; max-width: 165vh;
+    background: rgba(8,10,30,.72); border: .3vh solid rgba(255,255,255,.18); border-radius: 2.4vh; }
+  #ready .rules li { display: flex; align-items: center; gap: 2vw; font-size: 4.1vh; font-weight: 800; line-height: 1.35; }
+  #ready .rules .rn { flex: none; width: 7vh; height: 7vh; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 4.4vh; font-weight: 900; color: #2a1300; background: linear-gradient(150deg, #ffd34d, #ff9f1a); }
+  #ready .rules em { font-style: normal; color: #ff5a6a; }
   #readyQr { position: absolute; right: 2vw; top: 2vh; background: #fff; color: #111; padding: 1vh; border-radius: 1vh; text-align: center; font-size: 1.6vh; font-weight: 800; }
-  #readyQr div { width: 13vh; height: 13vh; margin-bottom: .6vh; }
+  #readyQr div { width: 12vh; height: 12vh; margin-bottom: .6vh; }
   #readyQr img, #readyQr canvas { width: 100% !important; height: 100% !important; }
 
   /* ===== 終了画面 ===== */
@@ -143,7 +150,7 @@
 </head>
 <body>
   <header>
-    <div id="title">イントロクイズ</div>
+    <div id="title">イントロドン！</div>
     <div id="joinInfo"></div>
   </header>
 
@@ -170,10 +177,13 @@
   </section>
 
   <section id="ready" hidden>
-    <div class="r1">まもなく</div>
-    <div class="r2" id="readyMain">クイズを開始します！</div>
-    <div class="rule">曲名がわかったら、スマホの<em>「わかった！」</em>ボタンを押してください</div>
-    <div class="rteams"><h3 id="readyTeamsTitle">参加チーム</h3><div id="readyChips"></div></div>
+    <div class="rtop"><div class="rlogo">イントロドン！</div><div class="rchip" id="readyChip">まもなく開始！</div></div>
+    <div class="rband">イントロ演奏：<b>TENCELS</b>（テンセルズ）</div>
+    <ol class="rules">
+      <li><span class="rn">1</span><div>イントロを聴いて分かったチームは、スマホに表示される<em>「わかった！」</em>ボタンを押してください</div></li>
+      <li><span class="rn">2</span><div>最初に<em>「わかった！」</em>ボタンを押したチームのところへ、司会がマイクを持っていくので回答してください</div></li>
+      <li><span class="rn">3</span><div>外した場合は、次に早押ししたチームに回答権がわたります</div></li>
+    </ol>
     <div id="readyQr"><div id="qrReady"></div>未登録の方はこちら</div>
   </section>
 
@@ -190,7 +200,7 @@
 
 <script>
 /* =========================================================
- * イントロクイズ 共通設定（Firebase Realtime Database）
+ * イントロドン！ 共通設定（Firebase Realtime Database）
  *
  * Firebase プロジェクト: intro-quiz-bf88f（設定済み）
  * Firebase コンソール →（歯車）プロジェクトの設定 → マイアプリ →
@@ -209,7 +219,7 @@ const FIREBASE_CONFIG = {
 /* ▲▲▲ ここまで ▲▲▲ */
 
 const TEAM_COUNT = 20;
-const DEFAULT_TITLE = 'イントロクイズ大会';
+const DEFAULT_TITLE = 'イントロドン！';
 
 if (!/^https:\/\//.test(FIREBASE_CONFIG.databaseURL || '')) {
   document.addEventListener('DOMContentLoaded', function () {
@@ -367,11 +377,7 @@ function baseUrl() {
     finishShown = false; $('finish').hidden = true;
     if (s.status === 'ready') {
       $('idle').hidden = true; $('live').hidden = true; $('ready').hidden = false;
-      $('readyMain').textContent = s.roundNo === 0 ? 'クイズを開始します！' : '第' + (s.roundNo + 1) + '問を開始します！';
-      $('readyTeamsTitle').textContent = '参加チーム（' + joinedTeams.length + '）';
-      $('readyChips').innerHTML = joinedTeams.map(function (t) {
-        return '<div class="chip"><span class="no">' + t.id + '</span>' + esc(t.name) + '</div>';
-      }).join('');
+      $('readyChip').textContent = s.roundNo === 0 ? 'まもなく開始！' : 'まもなく第' + (s.roundNo + 1) + '問！';
       if (!readyShown) { readyShown = true; fanfare(); }
       return;
     }
@@ -386,6 +392,7 @@ function baseUrl() {
         $('teamChips').innerHTML = joinedTeams.length ? joinedTeams.map(function (t) {
           return '<div class="chip"><span class="no">' + t.id + '</span>' + esc(t.name) + '</div>';
         }).join('') : '<div class="noteam">まだ参加チームはありません</div>';
+        fitNames();
       }
       lastBuzzCount = 0;
       return;
@@ -410,11 +417,13 @@ function baseUrl() {
     tilesSig = sig;
 
     if (!ranking.length) {
+      $('tiles').className = '';
       $('tiles').innerHTML = '<div id="waitMsg">' + (s.status === 'open'
         ? '曲名がわかったら<br><em>「わかった！」</em>ボタン！' : '回答なし') + '</div>';
       return;
     }
     // 既存タイルは再アニメーションさせず、新しく増えたタイルだけポップさせる
+    $('tiles').className = ranking.length <= 5 ? 'm1' : ranking.length <= 10 ? 'm2' : '';
     const old = {};
     $('tiles').querySelectorAll('.tile').forEach(function (el) { old[el.dataset.key] = true; });
     $('tiles').innerHTML = ranking.map(function (b, i) {
@@ -426,7 +435,20 @@ function baseUrl() {
         '<div class="nm"><span class="no">' + b.teamId + '</span>' + esc(b.name) + '</div>' +
         '<div class="tm">' + sec(b.ms) + '秒</div></div>';
     }).join('');
+    fitNames();
   }
+
+  /* 長いチーム名は1行に収まるよう文字を自動で小さくする */
+  function fitNames() {
+    document.querySelectorAll('#tiles .tile .nm, #teamChips .chip, #readyChips .chip').forEach(function (el) {
+      if (getComputedStyle(el).whiteSpace !== 'nowrap') return;
+      el.style.fontSize = '';
+      const base = parseFloat(getComputedStyle(el).fontSize);
+      let size = base;
+      while (el.scrollWidth > el.clientWidth + 1 && size > base * 0.55) { size -= base * 0.05; el.style.fontSize = size + 'px'; }
+    });
+  }
+  window.addEventListener('resize', fitNames);
 
   function tick() {
     if (state.status !== 'idle' && state.startAt) {

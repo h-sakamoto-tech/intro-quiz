@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>イントロクイズ - 管理画面</title>
+<title>イントロドン！ - 管理画面</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <style>
@@ -58,7 +58,7 @@
 </head>
 <body>
   <header>
-    <h1>イントロクイズ 管理画面</h1>
+    <h1>イントロドン！ 管理画面</h1>
     <span class="sp"></span>
     <span id="conn" hidden>再接続中…</span>
     <span id="joinedHead"></span>
@@ -81,7 +81,7 @@
       </div>
       <div class="subRow">
         <button id="btnIdle">待機画面（QR・参加状況）へ</button>
-        <button id="btnReady" class="ready">「まもなく開始」を表示</button>
+        <button id="btnReady" class="ready">ルール説明（まもなく開始）を表示</button>
         <button id="btnCancel" class="danger">この問題をやり直し</button>
         <button id="btnFinish" class="finish">クイズ終了</button>
         <button id="btnPrev">◀ 前の問題に戻る</button>
@@ -151,7 +151,7 @@
 
 <script>
 /* =========================================================
- * イントロクイズ 共通設定（Firebase Realtime Database）
+ * イントロドン！ 共通設定（Firebase Realtime Database）
  *
  * Firebase プロジェクト: intro-quiz-bf88f（設定済み）
  * Firebase コンソール →（歯車）プロジェクトの設定 → マイアプリ →
@@ -170,7 +170,7 @@ const FIREBASE_CONFIG = {
 /* ▲▲▲ ここまで ▲▲▲ */
 
 const TEAM_COUNT = 20;
-const DEFAULT_TITLE = 'イントロクイズ大会';
+const DEFAULT_TITLE = 'イントロドン！';
 
 if (!/^https:\/\//.test(FIREBASE_CONFIG.databaseURL || '')) {
   document.addEventListener('DOMContentLoaded', function () {
@@ -305,7 +305,7 @@ function baseUrl() {
     $('joinedHead').textContent = '参加 ' + joined + ' / ' + teams.length;
     $('stRound').textContent = s.roundNo ? '第' + s.roundNo + '問' : '開始前';
     $('stBadge').className = s.status;
-    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了', finished: 'クイズ終了', ready: 'まもなく開始' }[s.status] || s.status;
+    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了', finished: 'クイズ終了', ready: 'ルール説明中' }[s.status] || s.status;
     $('btnStart').disabled = s.status === 'open';
     $('btnStop').disabled = s.status !== 'open';
     $('btnStart').textContent = '▶ 第' + (s.status === 'open' ? s.roundNo : s.roundNo + 1) + '問 スタート（演奏開始）';
