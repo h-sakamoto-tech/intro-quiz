@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>イントロクイズ - 回答</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #10131c; color: #fff;
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  body { display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; }
+  header { padding: 12px 16px; background: #1b2030; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  #title { font-weight: 700; font-size: 15px; opacity: .8; }
+  #teamLabel { font-weight: 800; font-size: 18px; color: #ffd84d; }
+  #conn { font-size: 11px; color: #ff7b7b; }
+  main { flex: 1; display: flex; flex-direction: column; padding: 16px; }
+  [hidden] { display: none !important; }
+
+  h2 { font-size: 20px; margin: 4px 0 14px; text-align: center; }
+  #teamGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .teamBtn { border: 2px solid #3b4460; background: #222842; color: #fff; border-radius: 12px; padding: 14px 8px; font-size: 16px; font-weight: 700; }
+  .teamBtn small { display: block; font-size: 11px; font-weight: 400; opacity: .7; margin-top: 4px; }
+  .teamBtn.taken { border-color: #6b4a4a; background: #2a2026; opacity: .75; }
+
+  #viewMain { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+  #roundLabel { font-size: 22px; font-weight: 700; opacity: .85; min-height: 1.4em; }
+  #buzz { width: 78vw; height: 78vw; max-width: 380px; max-height: 380px; border-radius: 50%; border: none;
+    font-size: 44px; font-weight: 900; color: #fff; background: #3a3f52; box-shadow: 0 10px 0 #24283a; touch-action: manipulation; }
+  #buzz.ready { background: radial-gradient(circle at 35% 30%, #ff6b6b, #d6142a 70%);
+    box-shadow: 0 12px 0 #8e0b1b, 0 0 40px rgba(255,60,60,.5); animation: pulse 1s infinite; }
+  #buzz.ready:active { transform: translateY(8px); box-shadow: 0 4px 0 #8e0b1b; }
+  #buzz.done { background: radial-gradient(circle at 35% 30%, #ffe27a, #e0a800 70%); color: #3a2a00; box-shadow: 0 10px 0 #9c7500; }
+  #buzz.sending { background: #6b5d2a; }
+  @keyframes pulse { 50% { box-shadow: 0 12px 0 #8e0b1b, 0 0 70px rgba(255,60,60,.85); } }
+  #msg { font-size: 20px; text-align: center; min-height: 2.6em; line-height: 1.3; }
+  .link { background: none; border: none; color: #8fa4ff; font-size: 14px; text-decoration: underline; padding: 8px; }
+
+  #loading { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 18px; opacity: .7; }
+  #modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; padding: 24px; }
+  #modal .box { background: #222842; border-radius: 14px; padding: 20px; max-width: 360px; width: 100%; }
+  #modal p { margin: 0 0 16px; line-height: 1.5; }
+  #modal .row { display: flex; gap: 10px; }
+  #modal button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 16px; font-weight: 700; }
+  #modalOk { background: #d6142a; color: #fff; }
+  #modalCancel { background: #3b4460; color: #fff; }
+</style>
+</head>
+<body>
+  <header>
+    <span id="title">イントロクイズ</span>
+    <span id="conn" hidden>再接続中…</span>
+    <span id="teamLabel"></span>
+  </header>
+  <main>
+    <div id="loading">接続中…</div>
+    <section id="viewSelect" hidden>
+      <h2>あなたのチームを選んでください</h2>
+      <div id="teamGrid"></div>
+    </section>
+    <section id="viewMain" hidden>
+      <div id="roundLabel"></div>
+      <button id="buzz" disabled>待機中</button>
+      <div id="msg"></div>
+      <button id="changeTeam" class="link">チームを変更する</button>
+    </section>
+  </main>
+  <div id="modal" hidden>
+    <div class="box">
+      <p id="modalText"></p>
+      <div class="row"><button id="modalCancel">やめる</button><button id="modalOk">OK</button></div>
+    </div>
+  </div>
+
+<script>
+/* =========================================================
+ * イントロクイズ 共通設定（Firebase Realtime Database）
+ *
+ * Firebase プロジェクト: intro-quiz-bf88f（設定済み）
+ * Firebase コンソール →（歯車）プロジェクトの設定 → マイアプリ →
+ * 「SDK の設定と構成」の firebaseConfig の中身を、下の { } に貼り付けます。
+ * databaseURL が入っていることを確認してください。
+ * ========================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBTJj_f35gAGVCe7nEyCOHKEwmwXMKn5v0",
+  authDomain: "intro-quiz-bf88f.firebaseapp.com",
+  databaseURL: "https://intro-quiz-bf88f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "intro-quiz-bf88f",
+  storageBucket: "intro-quiz-bf88f.firebasestorage.app",
+  messagingSenderId: "326197546643",
+  appId: "1:326197546643:web:f8ce4c781f82c1eff94766"
+};
+/* ▲▲▲ ここまで ▲▲▲ */
+
+const TEAM_COUNT = 20;
+const DEFAULT_TITLE = 'イントロクイズ大会';
+
+if (!/^https:\/\//.test(FIREBASE_CONFIG.databaseURL || '')) {
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.innerHTML = '<div style="padding:24px;font:16px sans-serif;color:#fff;background:#b00020">' +
+      'common.js の FIREBASE_CONFIG が未設定です。Firebase の設定（databaseURL を含む）を貼り付けてください。</div>';
+  });
+  throw new Error('FIREBASE_CONFIG not set');
+}
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+const ROOT = db.ref('introquiz');
+const TS = firebase.database.ServerValue.TIMESTAMP;
+
+/* サーバー時刻との差（Firebase が自動測定）。押下時刻の補正に使う */
+let serverOffset = 0;
+db.ref('.info/serverTimeOffset').on('value', function (s) { serverOffset = s.val() || 0; });
+function serverNow() { return Date.now() + serverOffset; }
+
+function onConnection(cb) {
+  db.ref('.info/connected').on('value', function (s) { cb(!!s.val()); });
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function sec(ms) { return (Math.max(0, ms) / 1000).toFixed(2); }
+
+function defaultState() {
+  return { title: DEFAULT_TITLE, roundNo: 0, status: 'idle', startAt: 0, endAt: 0, showQr: true, reveal: '' };
+}
+
+/** teams オブジェクト → [{id, name, device, joined}] (1..TEAM_COUNT) */
+function teamList(teamsObj) {
+  const out = [];
+  for (let i = 1; i <= TEAM_COUNT; i++) {
+    const t = (teamsObj && teamsObj[i]) || {};
+    out.push({ id: i, name: t.name || ('チーム' + i), device: t.device || '', joined: !!t.device });
+  }
+  return out;
+}
+
+/**
+ * 押下記録 → 順位
+ *  ms = 押した瞬間の補正済み時刻 − 開始時刻
+ *  不正・時計ズレ対策で 0 〜（サーバー受信時刻 − 開始時刻）にクランプ
+ */
+function computeRanking(buzzesObj, startAt, teams) {
+  const names = {};
+  (teams || []).forEach(function (t) { names[t.id] = t.name; });
+  return Object.keys(buzzesObj || {}).map(function (tid) {
+    const b = buzzesObj[tid] || {};
+    let ms = Number(b.at) - startAt;
+    const recv = Number(b.recv) || 0;
+    if (recv) ms = Math.min(ms, recv - startAt);
+    if (!isFinite(ms)) ms = recv ? recv - startAt : 0;
+    return { teamId: Number(tid), name: names[tid] || ('チーム' + tid), ms: Math.max(0, Math.round(ms)), recv: recv };
+  }).sort(function (a, b) { return (a.ms - b.ms) || (a.recv - b.recv); });
+}
+
+/** このページのフォルダURL（QRコード用） */
+function baseUrl() {
+  return location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
+}
+
+</script>
+<script>
+  const $ = function (id) { return document.getElementById(id); };
+  const LS = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  let deviceId = LS.get('iq_device');
+  if (!deviceId) {
+    deviceId = 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    LS.set('iq_device', deviceId);
+  }
+
+  let state = null, teams = null, buzzes = {}, myTeam = 0;
+  let pressedRound = -1, subRound = null, buzzRef = null, gridSig = '', notice = '';
+
+  function confirmBox(text, okOnly) {
+    return new Promise(function (resolve) {
+      $('modalText').textContent = text;
+      $('modalCancel').hidden = !!okOnly;
+      $('modal').hidden = false;
+      $('modalOk').onclick = function () { $('modal').hidden = true; resolve(true); };
+      $('modalCancel').onclick = function () { $('modal').hidden = true; resolve(false); };
+    });
+  }
+
+  onConnection(function (ok) { $('conn').hidden = ok; });
+
+  ROOT.child('state').on('value', function (s) {
+    state = Object.assign(defaultState(), s.val() || {});
+    if (subRound !== state.roundNo) {
+      if (buzzRef) buzzRef.off();
+      subRound = state.roundNo; buzzes = {};
+      buzzRef = ROOT.child('buzzes/' + state.roundNo);
+      buzzRef.on('value', function (b) { buzzes = b.val() || {}; render(); });
+    }
+    render();
+  });
+
+  ROOT.child('teams').on('value', function (s) {
+    teams = teamList(s.val());
+    const mine = teams.find(function (t) { return t.device === deviceId; });
+    const prev = myTeam;
+    myTeam = mine ? mine.id : 0;
+    if (prev && !myTeam) notice = 'チームの参加が解除されました';
+    render();
+  });
+
+  function teamName(id) {
+    const t = teams && teams.find(function (x) { return x.id === id; });
+    return t ? t.name : '';
+  }
+
+  function render() {
+    if (!state || !teams) return;
+    $('loading').hidden = true;
+    $('title').textContent = state.title;
+
+    if (!myTeam) {
+      $('viewMain').hidden = true; $('viewSelect').hidden = false; $('teamLabel').textContent = '';
+      if (notice) { const n = notice; notice = ''; confirmBox(n, true); }
+      const sig = JSON.stringify(teams.map(function (t) { return [t.name, t.joined]; }));
+      if (sig !== gridSig) {
+        gridSig = sig;
+        $('teamGrid').innerHTML = teams.map(function (t) {
+          return '<button class="teamBtn' + (t.joined ? ' taken' : '') + '" data-id="' + t.id + '" data-joined="' + (t.joined ? 1 : 0) + '">' +
+            esc(t.name) + '<small>' + (t.joined ? '参加中（他の端末）' : 'タップして参加') + '</small></button>';
+        }).join('');
+      }
+      return;
+    }
+
+    $('viewSelect').hidden = true; $('viewMain').hidden = false;
+    $('teamLabel').textContent = teamName(myTeam);
+    $('roundLabel').textContent = state.roundNo > 0 && state.status !== 'idle' ? '第' + state.roundNo + '問' : '';
+
+    const ranking = computeRanking(buzzes, state.startAt, teams);
+    const idx = ranking.findIndex(function (b) { return b.teamId === myTeam; });
+    const mine = idx >= 0 ? ranking[idx] : null;
+    const btn = $('buzz');
+    btn.className = ''; btn.disabled = true;
+    let msg = '';
+
+    if (state.status === 'open') {
+      if (mine) { btn.className = 'done'; btn.textContent = (idx + 1) + '位'; msg = sec(mine.ms) + ' 秒'; }
+      else if (pressedRound === state.roundNo) { btn.className = 'sending'; btn.textContent = '送信中…'; msg = 'そのままお待ちください'; }
+      else { btn.className = 'ready'; btn.disabled = false; btn.textContent = 'ANSWER!'; msg = '分かったら押す！'; }
+    } else if (state.status === 'closed') {
+      if (mine) { btn.className = 'done'; btn.textContent = (idx + 1) + '位'; msg = sec(mine.ms) + ' 秒<br><small>受付終了</small>'; }
+      else { btn.textContent = '終了'; msg = '受付終了<br><small>次の問題をお待ちください</small>'; }
+      if (state.reveal) msg += '<br><small>正解：' + esc(state.reveal) + '</small>';
+    } else {
+      btn.textContent = '待機中'; msg = '演奏が始まるとボタンが<br>赤くなります';
+    }
+    if (notice) { msg = notice; notice = ''; }
+    $('msg').innerHTML = msg;
+  }
+
+  /* チーム選択 */
+  $('teamGrid').addEventListener('click', async function (ev) {
+    const b = ev.target.closest('.teamBtn');
+    if (!b) return;
+    const id = Number(b.dataset.id);
+    const taken = b.dataset.joined === '1';
+    const ok = await confirmBox(taken
+      ? '「' + teamName(id) + '」は別の端末が参加中です。この端末に引き継ぎますか？'
+      : '「' + teamName(id) + '」で参加します。よろしいですか？');
+    if (!ok) return;
+    try {
+      const prev = myTeam;
+      const r = await ROOT.child('teams/' + id + '/device').transaction(function (cur) {
+        if (cur && cur !== deviceId && !taken) return;   // 直前に他の端末が参加 → 中止
+        return deviceId;
+      });
+      if (!r.committed) { await confirmBox('他の端末が先に参加しました。もう一度選んでください。', true); return; }
+      if (prev && prev !== id) {
+        ROOT.child('teams/' + prev + '/device').transaction(function (cur) { return cur === deviceId ? '' : undefined; });
+      }
+    } catch (e) { await confirmBox('通信に失敗しました。もう一度お試しください。', true); }
+  });
+
+  $('changeTeam').addEventListener('click', async function () {
+    if (!(await confirmBox('チームの参加を解除して選び直しますか？'))) return;
+    const id = myTeam;
+    myTeam = 0; gridSig = '';
+    try { await ROOT.child('teams/' + id + '/device').transaction(function (cur) { return cur === deviceId ? '' : undefined; }); } catch (e) {}
+    render();
+  });
+
+  /* アンサー */
+  async function doBuzz(ev) {
+    if (ev) ev.preventDefault();
+    if (!state || state.status !== 'open' || pressedRound === state.roundNo || !myTeam) return;
+    const at = serverNow();               // 押した瞬間のサーバー基準時刻
+    const round = state.roundNo;
+    pressedRound = round;
+    if (navigator.vibrate) navigator.vibrate(80);
+    render();
+    try {
+      await ROOT.child('buzzes/' + round + '/' + myTeam).transaction(function (cur) {
+        if (cur) return;                  // 既に押下済み
+        return { at: at, recv: TS, device: deviceId };
+      });
+    } catch (e) {
+      if (state.status === 'open' && state.roundNo === round) {
+        pressedRound = -1;
+        notice = '送信に失敗しました。もう一度押してください';
+      }
+    }
+    render();
+  }
+  $('buzz').addEventListener('pointerdown', doBuzz);
+  $('buzz').addEventListener('click', doBuzz);
+</script>
+</body>
+</html>

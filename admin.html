@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>イントロクイズ - 管理画面</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f3f4f8; color: #1d2333; font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif; font-size: 14px; }
+  [hidden] { display: none !important; }
+  header { background: #1d2333; color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sp { flex: 1; }
+  #conn { color: #ff9b9b; font-size: 12px; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { font-size: 15px; margin: 0 0 12px; }
+  .full { grid-column: 1 / -1; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid #c9cedc; background: #fff; padding: 8px 12px; }
+  button:disabled { opacity: .4; cursor: default; }
+  .big { font-size: 20px; font-weight: 800; padding: 18px; border: none; color: #fff; width: 100%; }
+  .start { background: #d6142a; }
+  .stop { background: #1d2333; }
+  .ctlRow { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .subRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .status { display: flex; align-items: baseline; gap: 16px; margin-bottom: 14px; }
+  #stRound { font-size: 26px; font-weight: 900; }
+  #stBadge { padding: 4px 12px; border-radius: 99px; font-weight: 700; color: #fff; background: #8a90a6; }
+  #stBadge.open { background: #d6142a; }
+  #stBadge.closed { background: #444b66; }
+  #stTimer { margin-left: auto; font-size: 30px; font-weight: 900; font-family: Menlo, Consolas, monospace; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #eceef4; text-align: left; }
+  th { font-size: 12px; color: #6b7390; font-weight: 600; }
+  td.num { font-family: Menlo, Consolas, monospace; text-align: right; }
+  input[type=text], input[type=password], textarea { font: inherit; padding: 6px 8px; border: 1px solid #c9cedc; border-radius: 6px; width: 100%; }
+  textarea { min-height: 160px; font-size: 13px; }
+  .on { color: #109a55; font-weight: 700; }
+  .off { color: #a0a6b8; }
+  .muted { color: #6b7390; font-size: 12px; }
+  .url { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .url code { flex: 1; background: #f3f4f8; padding: 6px 8px; border-radius: 6px; font-size: 12px; word-break: break-all; }
+  .danger { color: #c4122a; border-color: #e7a4ad; }
+  .song { margin-top: 12px; padding: 12px; background: #fff7e0; border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
+  #songName { font-size: 18px; font-weight: 800; }
+  #login { max-width: 360px; margin: 80px auto; }
+  #login .row { display: flex; gap: 8px; margin-top: 10px; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1d2333; color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 9; }
+  .hist { margin-bottom: 10px; }
+  .hist h3 { font-size: 13px; margin: 0 0 4px; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <header>
+    <h1>イントロクイズ 管理画面</h1>
+    <span class="sp"></span>
+    <span id="conn" hidden>再接続中…</span>
+    <span id="joinedHead"></span>
+  </header>
+
+  <div id="login" class="card">
+    <h2>管理者パスワード</h2>
+    <div class="row"><input type="password" id="pass" placeholder="パスワード"><button id="loginBtn">ログイン</button></div>
+    <p class="muted" id="loginErr"></p>
+  </div>
+
+  <div class="wrap" id="main" hidden>
+    <div class="card">
+      <h2>進行</h2>
+      <div class="status"><span id="stRound">-</span><span id="stBadge">待機</span><span id="stTimer">0.00</span></div>
+      <div class="ctlRow">
+        <button class="big start" id="btnStart">▶ スタート（演奏開始）</button>
+        <button class="big stop" id="btnStop">■ ストップ</button>
+      </div>
+      <div class="subRow">
+        <button id="btnIdle">待機画面（QR・参加状況）へ</button>
+        <button id="btnCancel" class="danger">この問題をやり直し</button>
+        <label style="margin-left:auto"><input type="checkbox" id="kbd" checked> スペースキーでスタート/ストップ</label>
+      </div>
+      <p class="muted">スタートを押した瞬間が 0.00 秒です。演奏の1音目と同時に押してください。参加中の全チームが押すと自動で受付終了します。</p>
+      <div class="song">
+        <div><span class="muted" id="songLabel">曲</span><div id="songName">-</div></div>
+        <div class="subRow">
+          <button id="btnReveal">正解をスクリーンに表示</button>
+          <button id="btnHide">正解を隠す</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>アンサー順位（リアルタイム）</h2>
+      <table><thead><tr><th>順位</th><th>チーム</th><th style="text-align:right">秒</th><th style="text-align:right">差</th></tr></thead>
+        <tbody id="rankBody"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>チーム（名前を編集して保存）</h2>
+      <table><thead><tr><th>#</th><th>チーム名</th><th>状態</th><th></th></tr></thead><tbody id="teamBody"></tbody></table>
+      <div class="subRow" style="margin-top:10px">
+        <button id="btnSaveNames">チーム名を保存</button>
+        <button id="btnKickAll" class="danger">全チームの参加を解除</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>曲リスト（司会用・このPCにだけ保存）</h2>
+      <textarea id="songs" placeholder="1行に1曲（1行目＝第1問）&#10;例）夜に駆ける / YOASOBI"></textarea>
+      <div class="subRow" style="margin-top:8px"><button id="btnSaveSongs">曲リストを保存</button>
+        <span class="muted">参加者のスマホには送られません。「正解を表示」した曲名だけがスクリーンに出ます。</span></div>
+    </div>
+
+    <div class="card">
+      <h2>表示設定</h2>
+      <div class="url"><input type="text" id="titleIn"><button id="btnTitle">タイトル保存</button></div>
+      <label><input type="checkbox" id="showQr"> スクリーンにQRコードを表示</label>
+      <h2 style="margin-top:20px">URL</h2>
+      <div class="url"><span style="width:80px">スクリーン</span><code id="urlScreen"></code><button data-copy="urlScreen">コピー</button></div>
+      <div class="url"><span style="width:80px">参加者</span><code id="urlPlayer"></code><button data-copy="urlPlayer">コピー</button></div>
+    </div>
+
+    <div class="card">
+      <h2>リハーサル / リセット</h2>
+      <div class="subRow">
+        <button id="btnSimJoin">ダミーで全チーム参加</button>
+        <button id="btnSimBuzz">ダミーチームが押す（受付中のみ）</button>
+      </div>
+      <div class="subRow" style="margin-top:8px">
+        <button id="btnReset" class="danger">全リセット（チーム名・タイトルは保持）</button>
+      </div>
+      <p class="muted">本番前に「全リセット」でダミー参加と履歴を消してください。</p>
+    </div>
+
+    <div class="card full">
+      <h2>結果履歴 <button id="btnCsv" style="margin-left:8px">CSVダウンロード</button></h2>
+      <div id="histBody" class="muted">まだありません</div>
+    </div>
+  </div>
+
+  <div id="toast" hidden></div>
+
+<script>
+/* =========================================================
+ * イントロクイズ 共通設定（Firebase Realtime Database）
+ *
+ * Firebase プロジェクト: intro-quiz-bf88f（設定済み）
+ * Firebase コンソール →（歯車）プロジェクトの設定 → マイアプリ →
+ * 「SDK の設定と構成」の firebaseConfig の中身を、下の { } に貼り付けます。
+ * databaseURL が入っていることを確認してください。
+ * ========================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBTJj_f35gAGVCe7nEyCOHKEwmwXMKn5v0",
+  authDomain: "intro-quiz-bf88f.firebaseapp.com",
+  databaseURL: "https://intro-quiz-bf88f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "intro-quiz-bf88f",
+  storageBucket: "intro-quiz-bf88f.firebasestorage.app",
+  messagingSenderId: "326197546643",
+  appId: "1:326197546643:web:f8ce4c781f82c1eff94766"
+};
+/* ▲▲▲ ここまで ▲▲▲ */
+
+const TEAM_COUNT = 20;
+const DEFAULT_TITLE = 'イントロクイズ大会';
+
+if (!/^https:\/\//.test(FIREBASE_CONFIG.databaseURL || '')) {
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.innerHTML = '<div style="padding:24px;font:16px sans-serif;color:#fff;background:#b00020">' +
+      'common.js の FIREBASE_CONFIG が未設定です。Firebase の設定（databaseURL を含む）を貼り付けてください。</div>';
+  });
+  throw new Error('FIREBASE_CONFIG not set');
+}
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+const ROOT = db.ref('introquiz');
+const TS = firebase.database.ServerValue.TIMESTAMP;
+
+/* サーバー時刻との差（Firebase が自動測定）。押下時刻の補正に使う */
+let serverOffset = 0;
+db.ref('.info/serverTimeOffset').on('value', function (s) { serverOffset = s.val() || 0; });
+function serverNow() { return Date.now() + serverOffset; }
+
+function onConnection(cb) {
+  db.ref('.info/connected').on('value', function (s) { cb(!!s.val()); });
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function sec(ms) { return (Math.max(0, ms) / 1000).toFixed(2); }
+
+function defaultState() {
+  return { title: DEFAULT_TITLE, roundNo: 0, status: 'idle', startAt: 0, endAt: 0, showQr: true, reveal: '' };
+}
+
+/** teams オブジェクト → [{id, name, device, joined}] (1..TEAM_COUNT) */
+function teamList(teamsObj) {
+  const out = [];
+  for (let i = 1; i <= TEAM_COUNT; i++) {
+    const t = (teamsObj && teamsObj[i]) || {};
+    out.push({ id: i, name: t.name || ('チーム' + i), device: t.device || '', joined: !!t.device });
+  }
+  return out;
+}
+
+/**
+ * 押下記録 → 順位
+ *  ms = 押した瞬間の補正済み時刻 − 開始時刻
+ *  不正・時計ズレ対策で 0 〜（サーバー受信時刻 − 開始時刻）にクランプ
+ */
+function computeRanking(buzzesObj, startAt, teams) {
+  const names = {};
+  (teams || []).forEach(function (t) { names[t.id] = t.name; });
+  return Object.keys(buzzesObj || {}).map(function (tid) {
+    const b = buzzesObj[tid] || {};
+    let ms = Number(b.at) - startAt;
+    const recv = Number(b.recv) || 0;
+    if (recv) ms = Math.min(ms, recv - startAt);
+    if (!isFinite(ms)) ms = recv ? recv - startAt : 0;
+    return { teamId: Number(tid), name: names[tid] || ('チーム' + tid), ms: Math.max(0, Math.round(ms)), recv: recv };
+  }).sort(function (a, b) { return (a.ms - b.ms) || (a.recv - b.recv); });
+}
+
+/** このページのフォルダURL（QRコード用） */
+function baseUrl() {
+  return location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
+}
+
+</script>
+<script>
+  /* ▼ 管理者パスワード（必要に応じて変更してください） */
+  const ADMIN_PASS = 'admin1234';
+
+  const $ = function (id) { return document.getElementById(id); };
+  const LS = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  let state = defaultState(), teams = teamList({}), buzzes = {}, histData = {};
+  let subRound = null, buzzRef = null, teamSig = '', namesDirty = false, closing = false, started = false;
+
+  function toast(t) { $('toast').textContent = t; $('toast').hidden = false; clearTimeout(toast._t); toast._t = setTimeout(function () { $('toast').hidden = true; }, 2200); }
+
+  /* ---- ログイン ---- */
+  function login() {
+    let ok = false;
+    try { ok = sessionStorage.getItem('iq_admin') === '1'; } catch (e) {}
+    if (!ok && $('pass').value !== ADMIN_PASS) { if ($('pass').value) $('loginErr').textContent = 'パスワードが違います'; return; }
+    try { sessionStorage.setItem('iq_admin', '1'); } catch (e) {}
+    $('login').hidden = true; $('main').hidden = false;
+    if (!started) { started = true; startApp(); }
+  }
+  $('loginBtn').onclick = login;
+  $('pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+  login();
+
+  function startApp() {
+    $('urlScreen').textContent = baseUrl() + 'screen.html';
+    $('urlPlayer').textContent = baseUrl();
+    $('songs').value = LS.get('iq_songs') || '';
+    onConnection(function (ok) { $('conn').hidden = ok; });
+    ROOT.child('state').on('value', function (s) {
+      if (!s.exists()) { ROOT.child('state').set(defaultState()); return; }
+      state = Object.assign(defaultState(), s.val());
+      if (subRound !== state.roundNo) {
+        if (buzzRef) buzzRef.off();
+        subRound = state.roundNo; buzzes = {};
+        buzzRef = ROOT.child('buzzes/' + state.roundNo);
+        buzzRef.on('value', function (b) { buzzes = b.val() || {}; render(); });
+      }
+      if (state.status !== 'open') closing = false;
+      render();
+    });
+    ROOT.child('teams').on('value', function (s) { teams = teamList(s.val()); render(); });
+    ROOT.child('histData').on('value', function (s) { histData = s.val() || {}; renderHistory(); });
+    tick();
+  }
+
+  /* ---- 曲リスト ---- */
+  function songOf(no) {
+    const line = ($('songs').value.split('\n')[no - 1] || '').trim();
+    if (!line) return '';
+    const p = line.split(/\s*[\/／]\s*/);
+    return p[1] ? p[0] + '（' + p.slice(1).join(' / ') + '）' : p[0];
+  }
+  $('btnSaveSongs').onclick = function () { LS.set('iq_songs', $('songs').value); render(); toast('曲リストを保存しました'); };
+  $('songs').addEventListener('input', function () { LS.set('iq_songs', $('songs').value); render(); });
+
+  /* ---- 描画 ---- */
+  function render() {
+    const s = state;
+    const joined = teams.filter(function (t) { return t.joined; }).length;
+    $('joinedHead').textContent = '参加 ' + joined + ' / ' + teams.length;
+    $('stRound').textContent = s.roundNo ? '第' + s.roundNo + '問' : '開始前';
+    $('stBadge').className = s.status;
+    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了' }[s.status] || s.status;
+    $('btnStart').disabled = s.status === 'open';
+    $('btnStop').disabled = s.status !== 'open';
+    $('btnStart').textContent = '▶ 第' + (s.status === 'open' ? s.roundNo : s.roundNo + 1) + '問 スタート（演奏開始）';
+    $('btnCancel').disabled = s.status === 'idle';
+
+    const ranking = computeRanking(buzzes, s.startAt, teams);
+    const top = ranking.length ? ranking[0].ms : 0;
+    $('rankBody').innerHTML = ranking.length ? ranking.map(function (b, i) {
+      return '<tr><td>' + (i + 1) + '</td><td>' + esc(b.name) + '</td><td class="num">' + sec(b.ms) + '</td><td class="num">' + (i ? '+' + sec(b.ms - top) : '') + '</td></tr>';
+    }).join('') : '<tr><td colspan="4" class="muted">まだありません</td></tr>';
+
+    // 参加中の全チームが押したら自動終了
+    if (s.status === 'open' && joined > 0 && ranking.length >= joined && !closing) { closing = true; closeRound(); }
+
+    const sig = JSON.stringify(teams.map(function (t) { return [t.name, t.joined]; }));
+    if (sig !== teamSig && !namesDirty) {
+      teamSig = sig;
+      $('teamBody').innerHTML = teams.map(function (t) {
+        return '<tr><td>' + t.id + '</td><td><input type="text" class="nameIn" maxlength="30" value="' + esc(t.name) + '"></td>' +
+          '<td class="' + (t.joined ? 'on' : 'off') + '">' + (t.joined ? '参加中' : '未参加') + '</td>' +
+          '<td>' + (t.joined ? '<button data-kick="' + t.id + '">解除</button>' : '') + '</td></tr>';
+      }).join('');
+    }
+
+    const songNo = s.status === 'idle' ? s.roundNo + 1 : s.roundNo;
+    const song = songOf(songNo);
+    $('songLabel').textContent = '第' + songNo + '問の曲（司会用）' + (s.status === 'idle' ? ' ※次の問題' : '');
+    $('songName').textContent = song || '（曲リスト未入力）';
+    $('btnReveal').disabled = s.status !== 'closed' || !song || !!s.reveal;
+    $('btnHide').disabled = !s.reveal;
+
+    if (document.activeElement !== $('titleIn')) $('titleIn').value = s.title;
+    $('showQr').checked = !!s.showQr;
+  }
+
+  function renderHistory() {
+    const rounds = Object.keys(histData).map(function (k) { return histData[k]; }).filter(Boolean)
+      .sort(function (a, b) { return a.roundNo - b.roundNo; });
+    $('histBody').classList.toggle('muted', !rounds.length);
+    $('histBody').innerHTML = rounds.length ? rounds.map(function (r) {
+      const res = Object.values(r.results || {});
+      return '<div class="hist"><h3>第' + r.roundNo + '問' + (r.song ? '　' + esc(r.song) : '') + '</h3>' +
+        (res.length ? res.map(function (b, i) { return (i + 1) + '位 ' + esc(b.name) + '（' + sec(b.ms) + '秒）'; }).join(' / ') : '回答なし') + '</div>';
+    }).join('') : 'まだありません';
+  }
+
+  function tick() {
+    if (state.startAt && state.status !== 'idle') {
+      const ms = state.status === 'open' ? serverNow() - state.startAt : (state.endAt || serverNow()) - state.startAt;
+      $('stTimer').textContent = sec(ms);
+    } else { $('stTimer').textContent = '0.00'; }
+    requestAnimationFrame(tick);
+  }
+
+  /* ---- 進行操作 ---- */
+  function fail(e) { toast('エラー: ' + (e && e.message || e)); }
+
+  function startRound() {
+    if (state.status === 'open') return;
+    ROOT.child('state').update({ roundNo: (state.roundNo || 0) + 1, status: 'open', startAt: TS, endAt: 0, reveal: '' }).catch(fail);
+  }
+
+  async function closeRound() {
+    const s = state, n = s.roundNo;
+    try {
+      await ROOT.child('state').update({ status: 'closed', endAt: TS });
+      await new Promise(function (r) { setTimeout(r, 800); });   // 送信途中の押下を待つ
+      const snap = await ROOT.child('buzzes/' + n).once('value');
+      const ranking = computeRanking(snap.val(), s.startAt, teams);
+      await ROOT.child('histData/' + n).set({
+        roundNo: n, startAt: s.startAt, song: songOf(n),
+        results: ranking.map(function (r) { return { teamId: r.teamId, name: r.name, ms: r.ms }; })
+      });
+    } catch (e) { fail(e); }
+  }
+
+  $('btnStart').onclick = startRound;
+  $('btnStop').onclick = function () { if (state.status === 'open') { closing = true; closeRound(); } };
+  $('btnIdle').onclick = function () { ROOT.child('state').update({ status: 'idle', reveal: '' }).catch(fail); };
+  $('btnCancel').onclick = function () {
+    if (!confirm('この問題の結果を破棄して、問題番号を1つ戻します。よろしいですか？')) return;
+    const n = state.roundNo, u = {};
+    u['state/roundNo'] = Math.max(0, n - 1); u['state/status'] = 'idle'; u['state/reveal'] = '';
+    u['state/startAt'] = 0; u['state/endAt'] = 0;
+    u['buzzes/' + n] = null; u['histData/' + n] = null;
+    ROOT.update(u).catch(fail);
+  };
+  document.addEventListener('keydown', function (e) {
+    if (!$('kbd').checked || e.code !== 'Space' || $('main').hidden) return;
+    if (/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    e.preventDefault();
+    if (e.repeat) return;
+    if (state.status === 'open') { closing = true; closeRound(); } else startRound();
+  });
+  $('btnReveal').onclick = function () { ROOT.child('state/reveal').set(songOf(state.roundNo)).catch(fail); };
+  $('btnHide').onclick = function () { ROOT.child('state/reveal').set('').catch(fail); };
+
+  /* ---- チーム ---- */
+  $('teamBody').addEventListener('input', function () { namesDirty = true; });
+  $('teamBody').addEventListener('click', function (e) {
+    const id = e.target.dataset.kick;
+    if (id && confirm('チーム' + id + ' の参加を解除しますか？')) ROOT.child('teams/' + id + '/device').set('').catch(fail);
+  });
+  $('btnSaveNames').onclick = function () {
+    const u = {};
+    document.querySelectorAll('.nameIn').forEach(function (inp, i) {
+      u[(i + 1) + '/name'] = inp.value.trim().slice(0, 30) || ('チーム' + (i + 1));
+    });
+    ROOT.child('teams').update(u).then(function () { namesDirty = false; teamSig = ''; render(); toast('チーム名を保存しました'); }, fail);
+  };
+  $('btnKickAll').onclick = function () {
+    if (!confirm('全チームの参加を解除しますか？')) return;
+    const u = {};
+    for (let i = 1; i <= TEAM_COUNT; i++) u[i + '/device'] = '';
+    ROOT.child('teams').update(u).catch(fail);
+  };
+
+  /* ---- 設定 ---- */
+  $('btnTitle').onclick = function () { ROOT.child('state/title').set($('titleIn').value.trim().slice(0, 40) || DEFAULT_TITLE).then(function () { toast('保存しました'); }, fail); };
+  $('showQr').onchange = function () { ROOT.child('state/showQr').set($('showQr').checked).catch(fail); };
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.onclick = function () {
+      const t = $(b.dataset.copy).textContent;
+      navigator.clipboard.writeText(t).then(function () { toast('コピーしました'); }, function () { prompt('コピーしてください', t); });
+    };
+  });
+
+  /* ---- リハーサル / リセット ---- */
+  $('btnSimJoin').onclick = function () {
+    const u = {};
+    teams.forEach(function (t) { if (!t.joined) u[t.id + '/device'] = 'SIM-' + t.id; });
+    ROOT.child('teams').update(u).catch(fail);
+  };
+  $('btnSimBuzz').onclick = function () {
+    if (state.status !== 'open') { toast('受付中のみ使えます'); return; }
+    const u = {}, span = Math.max(1, serverNow() - state.startAt);
+    teams.forEach(function (t) {
+      if (t.device.indexOf('SIM-') === 0 && !buzzes[t.id]) {
+        u[state.roundNo + '/' + t.id] = { at: state.startAt + Math.round(Math.random() * span), recv: TS, device: t.device };
+      }
+    });
+    ROOT.child('buzzes').update(u).catch(fail);
+  };
+  $('btnReset').onclick = function () {
+    if (!confirm('参加状況・問題番号・結果履歴をすべてリセットします（チーム名とタイトルは残ります）。よろしいですか？')) return;
+    const u = { buzzes: null, histData: null };
+    const d = defaultState(); d.title = state.title; d.showQr = state.showQr;
+    u.state = d;
+    for (let i = 1; i <= TEAM_COUNT; i++) u['teams/' + i + '/device'] = '';
+    ROOT.update(u).then(function () { toast('リセットしました'); }, fail);
+  };
+
+  /* ---- CSV ---- */
+  $('btnCsv').onclick = function () {
+    const rows = [['問題', '順位', 'チーム', '秒', '曲名']];
+    Object.keys(histData).map(function (k) { return histData[k]; }).filter(Boolean)
+      .sort(function (a, b) { return a.roundNo - b.roundNo; })
+      .forEach(function (r) {
+        const res = Object.values(r.results || {});
+        if (!res.length) rows.push([r.roundNo, '-', '（回答なし）', '', r.song || '']);
+        res.forEach(function (b, i) { rows.push([r.roundNo, i + 1, b.name, sec(b.ms), r.song || '']); });
+      });
+    const csv = '﻿' + rows.map(function (r) { return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'intro-quiz-results.csv';
+    a.click();
+  };
+</script>
+</body>
+</html>

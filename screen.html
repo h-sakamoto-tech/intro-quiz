@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>イントロクイズ - スクリーン</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e17; color: #fff;
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif; }
+  body { display: flex; flex-direction: column; }
+  [hidden] { display: none !important; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 1.6vh 3vw;
+    background: linear-gradient(90deg, #2a0f3d, #0f1e4a); }
+  #title { font-size: 3.4vh; font-weight: 800; letter-spacing: .1em; }
+  #joinInfo { font-size: 2.6vh; opacity: .85; }
+
+  /* 待機画面 */
+  #idle { flex: 1; display: flex; gap: 4vw; padding: 4vh 4vw; align-items: center; }
+  .qrbox { background: #fff; border-radius: 2vh; padding: 3vh; text-align: center; color: #111; }
+  #qr { width: 46vh; height: 46vh; }
+  #qr img, #qr canvas { width: 100% !important; height: 100% !important; }
+  .qrcap { margin-top: 2vh; font-size: 3vh; font-weight: 800; line-height: 1.4; }
+  .idleRight { flex: 1; display: flex; flex-direction: column; gap: 2.5vh; }
+  #idleHeadline { font-size: 6vh; font-weight: 900; }
+  #teamTiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.4vh; }
+  .tile { padding: 2vh 1vh; border-radius: 1.2vh; background: #1a1f30; border: .3vh solid #2c3350;
+    text-align: center; font-size: 2.4vh; font-weight: 700; color: #7c86a8; transition: all .3s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.on { background: #133a2a; border-color: #2fd07a; color: #fff; box-shadow: 0 0 1.5vh rgba(47,208,122,.4); }
+
+  /* 出題中 / 結果 */
+  #live { flex: 1; display: flex; flex-direction: column; padding: 2vh 3vw 3vh; min-height: 0; }
+  .liveHead { display: flex; align-items: center; gap: 3vw; margin-bottom: 2vh; }
+  #roundNo { font-size: 6vh; font-weight: 900; }
+  #badge { font-size: 3vh; font-weight: 800; padding: .8vh 2vw; border-radius: 99px; }
+  #badge.open { background: #d6142a; animation: blink 1s infinite; }
+  #badge.closed { background: #444b66; }
+  @keyframes blink { 50% { opacity: .55; } }
+  #timer { margin-left: auto; font-size: 9vh; font-weight: 900; font-variant-numeric: tabular-nums;
+    font-family: "SF Mono", Menlo, Consolas, monospace; }
+  #timer small { font-size: 4vh; margin-left: .5vw; opacity: .7; }
+
+  #ranks { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(10, 1fr);
+    grid-auto-flow: column; gap: 1vh 2vw; min-height: 0; }
+  .rank { display: flex; align-items: center; gap: 1.5vw; background: #161b2b; border-radius: 1vh;
+    padding: 0 1.5vw; font-size: 3.4vh; font-weight: 800; min-height: 0; overflow: hidden;
+    animation: pop .45s ease-out; }
+  .rank .no { width: 4.5vw; text-align: center; font-size: 3.6vh; }
+  .rank .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rank .tm { font-variant-numeric: tabular-nums; font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .rank .df { width: 7vw; text-align: right; font-size: 2.4vh; opacity: .6; font-variant-numeric: tabular-nums; }
+  .rank.r1 { background: linear-gradient(90deg, #b8860b, #6b4e07); }
+  .rank.r2 { background: linear-gradient(90deg, #8e99a8, #4a5260); }
+  .rank.r3 { background: linear-gradient(90deg, #a0522d, #5a2e19); }
+  .rank.empty { background: transparent; border: .2vh dashed #262c40; animation: none; }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #waitMsg { grid-column: 1 / -1; grid-row: 1 / -1; display: flex; align-items: center; justify-content: center;
+    font-size: 6vh; font-weight: 800; opacity: .5; }
+
+  #reveal { margin-top: 2vh; display: flex; align-items: center; gap: 2vw; padding: 2vh 3vw; border-radius: 1.5vh;
+    background: linear-gradient(90deg, #ffcf3f, #ff8a00); color: #2a1600; animation: pop .5s ease-out; }
+  #reveal span { font-size: 3.4vh; font-weight: 900; background: #2a1600; color: #ffcf3f; padding: .6vh 1.6vw; border-radius: 99px; }
+  #reveal b { font-size: 6vh; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #miniQr { position: fixed; right: 2vw; bottom: 2vh; background: #fff; padding: 1vh; border-radius: 1vh; }
+  #miniQr div { width: 14vh; height: 14vh; }
+  #miniQr img, #miniQr canvas { width: 100% !important; height: 100% !important; }
+
+  #starter { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2vh; font-size: 4vh; cursor: pointer; z-index: 10; }
+  #starter small { font-size: 2.4vh; opacity: .7; }
+  #conn { position: fixed; left: 1vw; bottom: 1vh; font-size: 1.8vh; color: #ff7b7b; }
+</style>
+</head>
+<body>
+  <header>
+    <div id="title">イントロクイズ</div>
+    <div id="joinInfo"></div>
+  </header>
+
+  <section id="idle" hidden>
+    <div class="qrbox" id="qrBox">
+      <div id="qr"></div>
+      <div class="qrcap">チーム代表者は<br>スマホで読み取り！</div>
+    </div>
+    <div class="idleRight">
+      <div id="idleHeadline">参加受付中</div>
+      <div id="teamTiles"></div>
+    </div>
+  </section>
+
+  <section id="live" hidden>
+    <div class="liveHead">
+      <div id="roundNo"></div>
+      <div id="badge"></div>
+      <div id="timer">0.00<small>秒</small></div>
+    </div>
+    <div id="ranks"></div>
+    <div id="reveal" hidden><span>正解</span><b id="revealText"></b></div>
+  </section>
+
+  <div id="miniQr" hidden><div id="qrSmall"></div></div>
+  <div id="starter">クリックして開始（効果音ON）<small>ブラウザを全画面表示（F11）にしてください</small></div>
+  <div id="conn" hidden>再接続中…</div>
+
+<script>
+/* =========================================================
+ * イントロクイズ 共通設定（Firebase Realtime Database）
+ *
+ * Firebase プロジェクト: intro-quiz-bf88f（設定済み）
+ * Firebase コンソール →（歯車）プロジェクトの設定 → マイアプリ →
+ * 「SDK の設定と構成」の firebaseConfig の中身を、下の { } に貼り付けます。
+ * databaseURL が入っていることを確認してください。
+ * ========================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBTJj_f35gAGVCe7nEyCOHKEwmwXMKn5v0",
+  authDomain: "intro-quiz-bf88f.firebaseapp.com",
+  databaseURL: "https://intro-quiz-bf88f-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "intro-quiz-bf88f",
+  storageBucket: "intro-quiz-bf88f.firebasestorage.app",
+  messagingSenderId: "326197546643",
+  appId: "1:326197546643:web:f8ce4c781f82c1eff94766"
+};
+/* ▲▲▲ ここまで ▲▲▲ */
+
+const TEAM_COUNT = 20;
+const DEFAULT_TITLE = 'イントロクイズ大会';
+
+if (!/^https:\/\//.test(FIREBASE_CONFIG.databaseURL || '')) {
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.innerHTML = '<div style="padding:24px;font:16px sans-serif;color:#fff;background:#b00020">' +
+      'common.js の FIREBASE_CONFIG が未設定です。Firebase の設定（databaseURL を含む）を貼り付けてください。</div>';
+  });
+  throw new Error('FIREBASE_CONFIG not set');
+}
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+const ROOT = db.ref('introquiz');
+const TS = firebase.database.ServerValue.TIMESTAMP;
+
+/* サーバー時刻との差（Firebase が自動測定）。押下時刻の補正に使う */
+let serverOffset = 0;
+db.ref('.info/serverTimeOffset').on('value', function (s) { serverOffset = s.val() || 0; });
+function serverNow() { return Date.now() + serverOffset; }
+
+function onConnection(cb) {
+  db.ref('.info/connected').on('value', function (s) { cb(!!s.val()); });
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function sec(ms) { return (Math.max(0, ms) / 1000).toFixed(2); }
+
+function defaultState() {
+  return { title: DEFAULT_TITLE, roundNo: 0, status: 'idle', startAt: 0, endAt: 0, showQr: true, reveal: '' };
+}
+
+/** teams オブジェクト → [{id, name, device, joined}] (1..TEAM_COUNT) */
+function teamList(teamsObj) {
+  const out = [];
+  for (let i = 1; i <= TEAM_COUNT; i++) {
+    const t = (teamsObj && teamsObj[i]) || {};
+    out.push({ id: i, name: t.name || ('チーム' + i), device: t.device || '', joined: !!t.device });
+  }
+  return out;
+}
+
+/**
+ * 押下記録 → 順位
+ *  ms = 押した瞬間の補正済み時刻 − 開始時刻
+ *  不正・時計ズレ対策で 0 〜（サーバー受信時刻 − 開始時刻）にクランプ
+ */
+function computeRanking(buzzesObj, startAt, teams) {
+  const names = {};
+  (teams || []).forEach(function (t) { names[t.id] = t.name; });
+  return Object.keys(buzzesObj || {}).map(function (tid) {
+    const b = buzzesObj[tid] || {};
+    let ms = Number(b.at) - startAt;
+    const recv = Number(b.recv) || 0;
+    if (recv) ms = Math.min(ms, recv - startAt);
+    if (!isFinite(ms)) ms = recv ? recv - startAt : 0;
+    return { teamId: Number(tid), name: names[tid] || ('チーム' + tid), ms: Math.max(0, Math.round(ms)), recv: recv };
+  }).sort(function (a, b) { return (a.ms - b.ms) || (a.recv - b.recv); });
+}
+
+/** このページのフォルダURL（QRコード用） */
+function baseUrl() {
+  return location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
+}
+
+</script>
+<script>
+  const $ = function (id) { return document.getElementById(id); };
+  const APP_URL = baseUrl();
+  let state = defaultState(), teams = teamList({}), buzzes = {};
+  let subRound = null, buzzRef = null, lastBuzzCount = 0, lastRound = -1, ranksSig = '', audio = null;
+
+  function makeQr(el, size) {
+    if (typeof QRCode === 'undefined') { el.textContent = APP_URL; return; }
+    new QRCode(el, { text: APP_URL, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+  }
+  makeQr($('qr'), 600);
+  makeQr($('qrSmall'), 300);
+
+  function beep(freq, dur) {
+    if (!audio) return;
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = 'square'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.15, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + dur);
+    o.connect(g); g.connect(audio.destination);
+    o.start(); o.stop(audio.currentTime + dur);
+  }
+  $('starter').addEventListener('click', function () {
+    try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+    try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch (e) {}
+    $('starter').hidden = true;
+    beep(880, .15);
+  });
+
+  onConnection(function (ok) { $('conn').hidden = ok; });
+  ROOT.child('state').on('value', function (s) {
+    state = Object.assign(defaultState(), s.val() || {});
+    if (subRound !== state.roundNo) {
+      if (buzzRef) buzzRef.off();
+      subRound = state.roundNo; buzzes = {};
+      buzzRef = ROOT.child('buzzes/' + state.roundNo);
+      buzzRef.on('value', function (b) { buzzes = b.val() || {}; render(); });
+    }
+    render();
+  });
+  ROOT.child('teams').on('value', function (s) { teams = teamList(s.val()); ranksSig = ''; render(); });
+
+  function render() {
+    const s = state;
+    $('title').textContent = s.title;
+    document.title = s.title + ' - スクリーン';
+    const joined = teams.filter(function (t) { return t.joined; }).length;
+    $('joinInfo').textContent = '参加 ' + joined + ' / ' + teams.length + ' チーム';
+
+    if (s.status === 'idle') {
+      $('live').hidden = true; $('idle').hidden = false; $('miniQr').hidden = true;
+      $('qrBox').hidden = !s.showQr;
+      $('idleHeadline').textContent = s.roundNo === 0 ? '参加受付中' : '第' + (s.roundNo + 1) + '問  まもなくスタート';
+      $('teamTiles').innerHTML = teams.map(function (t) {
+        return '<div class="tile' + (t.joined ? ' on' : '') + '">' + esc(t.name) + '</div>';
+      }).join('');
+      lastBuzzCount = 0;
+      return;
+    }
+
+    $('idle').hidden = true; $('live').hidden = false; $('miniQr').hidden = !s.showQr || !!s.reveal;
+    $('roundNo').textContent = '第' + s.roundNo + '問';
+    $('badge').className = s.status;
+    $('badge').textContent = s.status === 'open' ? 'ANSWER受付中' : '受付終了';
+    if (s.reveal && $('reveal').hidden) beep(990, .4);
+    $('reveal').hidden = !s.reveal;
+    $('revealText').textContent = s.reveal || '';
+
+    const ranking = computeRanking(buzzes, s.startAt, teams);
+    if (s.roundNo !== lastRound) { lastRound = s.roundNo; lastBuzzCount = 0; ranksSig = ''; }
+    if (ranking.length > lastBuzzCount) {
+      beep(lastBuzzCount === 0 ? 1320 : 660, lastBuzzCount === 0 ? .35 : .12);
+      lastBuzzCount = ranking.length;
+    }
+
+    const sig = s.roundNo + ':' + s.status + ':' + JSON.stringify(ranking);
+    if (sig === ranksSig) return;
+    ranksSig = sig;
+
+    if (!ranking.length) {
+      $('ranks').innerHTML = '<div id="waitMsg">' + (s.status === 'open' ? '分かったらアンサーボタン！' : '回答なし') + '</div>';
+      return;
+    }
+    const top = ranking[0].ms;
+    const slots = ranking.length > 10 ? 20 : 10;
+    $('ranks').style.gridTemplateRows = 'repeat(' + (slots / 2) + ', 1fr)';
+    let html = '';
+    for (let i = 0; i < slots; i++) {
+      const b = ranking[i];
+      if (!b) { html += '<div class="rank empty"></div>'; continue; }
+      html += '<div class="rank r' + (i + 1) + '">' +
+        '<span class="no">' + (i + 1) + '</span>' +
+        '<span class="nm">' + esc(b.name) + '</span>' +
+        '<span class="tm">' + sec(b.ms) + '秒</span>' +
+        '<span class="df">' + (i === 0 ? '' : '+' + sec(b.ms - top)) + '</span></div>';
+    }
+    $('ranks').innerHTML = html;
+  }
+
+  function tick() {
+    if (state.status !== 'idle' && state.startAt) {
+      const ms = state.status === 'open' ? serverNow() - state.startAt : (state.endAt || serverNow()) - state.startAt;
+      $('timer').innerHTML = sec(ms) + '<small>秒</small>';
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+</script>
+</body>
+</html>
