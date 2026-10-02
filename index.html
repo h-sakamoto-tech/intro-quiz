@@ -237,6 +237,8 @@ function baseUrl() {
       if (mine) { btn.className = 'done'; btn.innerHTML = (idx + 1) + '位<small>' + sec(mine.ms) + ' 秒</small>'; msg = '受付終了'; }
       else { btn.textContent = '終了'; msg = '受付終了<br><small>次の問題をお待ちください</small>'; }
       if (state.reveal) msg += '<br><small>正解：' + esc(state.reveal) + '</small>';
+    } else if (state.status === 'finished') {
+      btn.textContent = '終了'; msg = 'クイズは終了しました<br><small>ご参加ありがとうございました！</small>';
     } else {
       btn.textContent = '待機中'; msg = '演奏が始まるとボタンが<br>赤くなります';
     }

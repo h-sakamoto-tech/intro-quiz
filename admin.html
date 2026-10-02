@@ -43,6 +43,7 @@
   .url { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
   .url code { flex: 1; background: #f3f4f8; padding: 6px 8px; border-radius: 6px; font-size: 12px; word-break: break-all; }
   .danger { color: #c4122a; border-color: #e7a4ad; }
+  .finish { background: #1d2333; color: #ffd84d; font-weight: 800; border-color: #1d2333; }
   .song { margin-top: 12px; padding: 12px; background: #fff7e0; border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
   #songName { font-size: 18px; font-weight: 800; }
   #login { max-width: 360px; margin: 80px auto; }
@@ -78,6 +79,7 @@
       <div class="subRow">
         <button id="btnIdle">待機画面（QR・参加状況）へ</button>
         <button id="btnCancel" class="danger">この問題をやり直し</button>
+        <button id="btnFinish" class="finish">クイズ終了</button>
         <button id="btnPrev">◀ 前の問題に戻る</button>
         <button id="btnBackTo1" class="danger">第1問に戻す（チームはそのまま）</button>
         <label style="margin-left:auto"><input type="checkbox" id="kbd" checked> スペースキーでスタート/ストップ</label>
@@ -299,11 +301,12 @@ function baseUrl() {
     $('joinedHead').textContent = '参加 ' + joined + ' / ' + teams.length;
     $('stRound').textContent = s.roundNo ? '第' + s.roundNo + '問' : '開始前';
     $('stBadge').className = s.status;
-    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了' }[s.status] || s.status;
+    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了', finished: 'クイズ終了' }[s.status] || s.status;
     $('btnStart').disabled = s.status === 'open';
     $('btnStop').disabled = s.status !== 'open';
     $('btnStart').textContent = '▶ 第' + (s.status === 'open' ? s.roundNo : s.roundNo + 1) + '問 スタート（演奏開始）';
     $('btnCancel').disabled = s.status === 'idle';
+    $('btnFinish').disabled = s.status === 'open' || s.status === 'finished';
     $('btnPrev').disabled = s.status === 'open' || s.roundNo < 1;
     $('btnPrev').textContent = s.roundNo >= 1 && s.status !== 'open' ? '◀ 前の問題に戻る（次を第' + s.roundNo + '問に）' : '◀ 前の問題に戻る';
     $('btnBackTo1').disabled = s.status === 'open' || (s.roundNo === 0 && s.status === 'idle');
@@ -390,6 +393,11 @@ function baseUrl() {
     u['state/startAt'] = 0; u['state/endAt'] = 0;
     u['buzzes/' + n] = null; u['history/' + n] = null;
     ROOT.update(u).catch(fail);
+  };
+  $('btnFinish').onclick = function () {
+    if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
+    if (!confirm('クイズを終了し、スクリーンに終了画面を表示します。よろしいですか？\n（あとから「待機画面へ」や「スタート」で再開することもできます）')) return;
+    ROOT.child('state').update({ status: 'finished', reveal: '' }).then(function () { toast('クイズ終了画面を表示しました'); }, fail);
   };
   $('btnPrev').onclick = function () {
     if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
