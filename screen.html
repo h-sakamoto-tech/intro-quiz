@@ -317,6 +317,7 @@ function baseUrl() {
     try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch (e) {}
     $('starter').hidden = true;
     tone(880, 0, 0.15);
+    audioUnlocked = true; updateBgm();
   });
 
   /* ---- 終了演出 ---- */
@@ -329,6 +330,48 @@ function baseUrl() {
         ';animation-duration:' + (3 + Math.random() * 4) + 's;animation-delay:' + (-Math.random() * 6) + 's"></span>';
     }
     $('confettiBox').innerHTML = html;
+  }
+
+  /* ---- QR表示画面のBGM ---- */
+  const bgm = new Audio(); bgm.loop = true; bgm.preload = 'auto';
+  let bgmMeta = null, bgmVer = null, bgmUrl = null, audioUnlocked = false, bgmFade = null, bgmRestart = true;
+  ROOT.child('bgm/idle/meta').on('value', async function (s) {
+    bgmMeta = s.val();
+    if (!bgmMeta) { bgmVer = null; stopBgm(true); bgm.removeAttribute('src'); return; }
+    if (bgmMeta.version !== bgmVer) {
+      bgmVer = bgmMeta.version;
+      try {
+        const d = (await ROOT.child('bgm/idle/data').once('value')).val() || {};
+        let b64 = '';
+        for (let i = 0; i < bgmMeta.chunks; i++) b64 += d[i] || '';
+        const bin = atob(b64), bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        if (bgmUrl) URL.revokeObjectURL(bgmUrl);
+        bgmUrl = URL.createObjectURL(new Blob([bytes], { type: bgmMeta.type || 'audio/mpeg' }));
+        stopBgm(true); bgm.src = bgmUrl; bgmRestart = true;
+      } catch (e) { console.error('BGM load error', e); }
+    }
+    updateBgm();
+  });
+  function stopBgm(now) {
+    clearInterval(bgmFade);
+    if (bgm.paused) return;
+    if (now) { bgm.pause(); bgmRestart = true; return; }
+    bgmFade = setInterval(function () {
+      if (bgm.volume > 0.06) { bgm.volume = Math.max(0, bgm.volume - 0.06); }
+      else { clearInterval(bgmFade); bgm.pause(); bgmRestart = true; }
+    }, 50);
+  }
+  function updateBgm() {
+    const vol = bgmMeta && bgmMeta.vol != null ? bgmMeta.vol / 100 : 0.7;
+    const want = audioUnlocked && bgmMeta && bgmMeta.on !== false && state.status === 'idle' && bgm.getAttribute('src');
+    if (want) {
+      clearInterval(bgmFade);
+      bgm.volume = vol;
+      if (bgm.paused) { if (bgmRestart) { bgm.currentTime = 0; bgmRestart = false; } bgm.play().catch(function (e) { console.warn('BGM play', e); }); }
+    } else {
+      stopBgm(false);
+    }
   }
 
   /* ---- スタート演出 ---- */
@@ -363,6 +406,7 @@ function baseUrl() {
   /* ---- 描画 ---- */
   function render() {
     const s = state;
+    updateBgm();
     $('title').textContent = s.title;
     document.title = s.title + ' - スクリーン';
     const joinedTeams = teams.filter(function (t) { return t.joined; });
