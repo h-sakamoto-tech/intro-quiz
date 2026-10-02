@@ -320,8 +320,8 @@ function baseUrl() {
   }
 
   /* ---- BGM（画面ごとに管理画面からアップロード） ----
-   * idle: QR表示画面 / ready: ルール説明画面 / round: 第〇問（スタートから受付終了まで） / finish: クイズ終了画面 */
-  const BGM_SLOTS = ['idle', 'ready', 'round', 'finish'];
+   * idle: QR表示画面 / ready: ルール説明画面 / round: 第〇問（受付中） / closed: 受付終了 / finish: クイズ終了画面 */
+  const BGM_SLOTS = ['idle', 'ready', 'round', 'closed', 'finish'];
   const bgmS = {};
   let audioUnlocked = false, bgmActiveKey = '';
   BGM_SLOTS.forEach(function (k) {
@@ -361,15 +361,16 @@ function baseUrl() {
     const st = state.status;
     if (st === 'idle') return 'idle';
     if (st === 'ready') return 'ready';
-    if (st === 'open' || st === 'closed') return 'round';
+    if (st === 'open') return 'round';
+    if (st === 'closed') return 'closed';
     if (st === 'finished') return 'finish';
     return '';
   }
   function updateBgm() {
     if (!audioUnlocked) return;
     const k = currentSlot();
-    // 第〇問は問題ごとに最初から（startAtで区別）
-    const key = k ? k + (k === 'round' ? ':' + state.startAt : '') : '';
+    // 第〇問・受付終了は問題ごとに最初から（startAtで区別）
+    const key = k ? k + (k === 'round' || k === 'closed' ? ':' + state.startAt : '') : '';
     BGM_SLOTS.forEach(function (x) { if (x !== k) stopSlot(x, false); });
     if (!k) { bgmActiveKey = key; return; }
     const o = bgmS[k], a = o.audio, m = o.meta;

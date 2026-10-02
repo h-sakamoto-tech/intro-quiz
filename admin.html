@@ -508,7 +508,8 @@ function baseUrl() {
   const BGM_DEF = [
     { k: 'idle',   label: 'QR表示画面（待機・参加受付）', loop: true },
     { k: 'ready',  label: 'イントロドン！説明画面', loop: true },
-    { k: 'round',  label: '第〇問（スタート〜受付終了）', loop: false },
+    { k: 'round',  label: '第〇問（スタート〜受付中）', loop: false },
+    { k: 'closed', label: '受付終了（回答タイム）', loop: true },
     { k: 'finish', label: 'クイズ終了画面', loop: true }
   ];
   const BGM_CHUNK = 512 * 1024;
