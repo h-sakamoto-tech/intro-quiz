@@ -34,6 +34,11 @@
   .chip { padding: 1.8vh 1vw; border-radius: 1.2vh; background: rgba(47,208,122,.15); border: .3vh solid #2fd07a;
     text-align: center; font-size: 2.6vh; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     animation: pop .45s cubic-bezier(.2,1.6,.4,1); }
+  .no { display: inline-block; min-width: 1.9em; padding: 0 .35em; margin-right: .4em; border-radius: .5em; font-size: .78em; line-height: 1.5;
+    text-align: center; vertical-align: .08em; background: rgba(255,255,255,.18); font-family: "SF Mono", Menlo, Consolas, monospace; }
+  .chip .no { background: #2fd07a; color: #052b16; }
+  .tile.r1 .no, .tile.r2 .no, .tile.r3 .no { background: rgba(0,0,0,.22); }
+  .chip { text-align: left !important; }
   .noteam { grid-column: 1 / -1; font-size: 3vh; opacity: .5; padding: 3vh 0; }
 
   /* ===== 出題中 ===== */
@@ -116,7 +121,7 @@
     </div>
     <div class="idleRight">
       <div id="idleHeadline">参加受付中</div>
-      <div id="idleSub">QRを読み取って、チーム名を入力してください</div>
+      <div id="idleSub">QRを読み取って、チーム名を登録してください</div>
       <div id="teamChips"></div>
     </div>
   </section>
@@ -300,7 +305,7 @@ function baseUrl() {
       if (sig !== chipsSig) {
         chipsSig = sig;
         $('teamChips').innerHTML = joinedTeams.length ? joinedTeams.map(function (t) {
-          return '<div class="chip">' + esc(t.name) + '</div>';
+          return '<div class="chip"><span class="no">' + t.id + '</span>' + esc(t.name) + '</div>';
         }).join('') : '<div class="noteam">まだ参加チームはありません</div>';
       }
       lastBuzzCount = 0;
@@ -339,7 +344,7 @@ function baseUrl() {
       return '<div class="tile r' + (i + 1) + '" data-key="' + key + '"' + still + '>' +
         '<span class="rk">' + (i + 1) + '位</span>' +
         (i === 0 && s.status === 'open' ? '<span class="mic">マイクへ！</span>' : '') +
-        '<div class="nm">' + esc(b.name) + '</div>' +
+        '<div class="nm"><span class="no">' + b.teamId + '</span>' + esc(b.name) + '</div>' +
         '<div class="tm">' + sec(b.ms) + '秒</div></div>';
     }).join('');
   }

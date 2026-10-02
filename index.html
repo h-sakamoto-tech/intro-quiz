@@ -58,7 +58,7 @@
       <h2 id="entryTitle">チーム名を入力してください</h2>
       <p id="entryNote">スクリーンにこの名前で表示されます</p>
       <input id="nameIn" type="text" maxlength="20" placeholder="例）総務部チーム" autocomplete="off">
-      <button id="joinBtn">参加する</button>
+      <button id="joinBtn">登録する</button>
       <p id="entryMsg"></p>
       <button id="cancelEdit" hidden>変更をやめる</button>
     </section>
@@ -212,14 +212,14 @@ function baseUrl() {
       $('viewMain').hidden = true; $('viewEntry').hidden = false;
       $('teamLabel').textContent = myTeam ? myName() : '';
       $('entryTitle').textContent = myTeam ? 'チーム名を変更' : 'チーム名を入力してください';
-      $('joinBtn').textContent = myTeam ? '変更する' : '参加する';
+      $('joinBtn').textContent = myTeam ? '変更する' : '登録する';
       $('cancelEdit').hidden = !myTeam;
       if (notice) { $('entryMsg').textContent = notice; notice = ''; }
       return;
     }
 
     $('viewEntry').hidden = true; $('viewMain').hidden = false;
-    $('teamLabel').textContent = myName();
+    $('teamLabel').textContent = 'No.' + myTeam + '  ' + myName();
     $('roundLabel').textContent = state.roundNo > 0 && state.status !== 'idle' ? '第' + state.roundNo + '問' : '';
 
     const ranking = computeRanking(buzzes, state.startAt, teams);
@@ -231,7 +231,7 @@ function baseUrl() {
 
     if (state.status === 'open') {
       if (mine) { btn.className = 'done'; btn.innerHTML = (idx + 1) + '位<small>' + sec(mine.ms) + ' 秒</small>'; msg = idx === 0 ? 'マイクが来たら曲名を答えてください！' : '押しました！'; }
-      else if (pressedRound === state.roundNo) { btn.className = 'sending'; btn.textContent = '送信中…'; msg = 'そのままお待ちください'; }
+      else if (pressedRound === state.startAt) { btn.className = 'sending'; btn.textContent = '送信中…'; msg = 'そのままお待ちください'; }
       else { btn.className = 'ready'; btn.disabled = false; btn.textContent = 'わかった！'; msg = '曲名がわかったら押す！'; }
     } else if (state.status === 'closed') {
       if (mine) { btn.className = 'done'; btn.innerHTML = (idx + 1) + '位<small>' + sec(mine.ms) + ' 秒</small>'; msg = '受付終了'; }
@@ -280,10 +280,10 @@ function baseUrl() {
   /* わかった！ */
   async function doBuzz(ev) {
     if (ev) ev.preventDefault();
-    if (!state || state.status !== 'open' || pressedRound === state.roundNo || !myTeam) return;
+    if (!state || state.status !== 'open' || pressedRound === state.startAt || !myTeam) return;
     const at = serverNow();               // 押した瞬間のサーバー基準時刻
-    const round = state.roundNo;
-    pressedRound = round;
+    const round = state.roundNo, startKey = state.startAt;
+    pressedRound = startKey;
     if (navigator.vibrate) navigator.vibrate(80);
     render();
     try {
@@ -292,7 +292,7 @@ function baseUrl() {
         return { at: at, recv: TS, device: deviceId };
       });
     } catch (e) {
-      if (state.status === 'open' && state.roundNo === round) {
+      if (state.status === 'open' && state.startAt === startKey) {
         pressedRound = -1;
         notice = '送信に失敗しました。もう一度押してください';
       }

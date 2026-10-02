@@ -78,6 +78,7 @@
       <div class="subRow">
         <button id="btnIdle">待機画面（QR・参加状況）へ</button>
         <button id="btnCancel" class="danger">この問題をやり直し</button>
+        <button id="btnBackTo1" class="danger">第1問に戻す（チームはそのまま）</button>
         <label style="margin-left:auto"><input type="checkbox" id="kbd" checked> スペースキーでスタート/ストップ</label>
       </div>
       <p class="muted">スタートを押した瞬間が 0.00 秒です。演奏の1音目と同時に押してください。参加中の全チームが押すと自動で受付終了します。</p>
@@ -98,7 +99,7 @@
 
     <div class="card">
       <h2>参加チーム（参加者がスマホで入力・ここで修正も可）</h2>
-      <table><thead><tr><th>#</th><th>チーム名</th><th>状態</th><th></th></tr></thead><tbody id="teamBody"></tbody></table>
+      <table><thead><tr><th>No.</th><th>チーム名</th><th>状態</th><th></th></tr></thead><tbody id="teamBody"></tbody></table>
       <div class="subRow" style="margin-top:10px">
         <button id="btnSaveNames">チーム名を保存</button>
         <button id="btnKickAll" class="danger">全チームの参加を解除</button>
@@ -276,7 +277,7 @@ function baseUrl() {
       render();
     });
     ROOT.child('teams').on('value', function (s) { teams = teamList(s.val()); render(); });
-    ROOT.child('histData').on('value', function (s) { histData = s.val() || {}; renderHistory(); });
+    ROOT.child('history').on('value', function (s) { histData = s.val() || {}; renderHistory(); });
     tick();
   }
 
@@ -302,11 +303,12 @@ function baseUrl() {
     $('btnStop').disabled = s.status !== 'open';
     $('btnStart').textContent = '▶ 第' + (s.status === 'open' ? s.roundNo : s.roundNo + 1) + '問 スタート（演奏開始）';
     $('btnCancel').disabled = s.status === 'idle';
+    $('btnBackTo1').disabled = s.status === 'open' || (s.roundNo === 0 && s.status === 'idle');
 
     const ranking = computeRanking(buzzes, s.startAt, teams);
     const top = ranking.length ? ranking[0].ms : 0;
     $('rankBody').innerHTML = ranking.length ? ranking.map(function (b, i) {
-      return '<tr><td>' + (i + 1) + '</td><td>' + esc(b.name) + '</td><td class="num">' + sec(b.ms) + '</td><td class="num">' + (i ? '+' + sec(b.ms - top) : '') + '</td></tr>';
+      return '<tr><td>' + (i + 1) + '</td><td>No.' + b.teamId + ' ' + esc(b.name) + '</td><td class="num">' + sec(b.ms) + '</td><td class="num">' + (i ? '+' + sec(b.ms - top) : '') + '</td></tr>';
     }).join('') : '<tr><td colspan="4" class="muted">まだありません</td></tr>';
 
     // 参加中の全チームが押したら自動終了
@@ -341,7 +343,7 @@ function baseUrl() {
     $('histBody').innerHTML = rounds.length ? rounds.map(function (r) {
       const res = Object.values(r.results || {});
       return '<div class="hist"><h3>第' + r.roundNo + '問' + (r.song ? '　' + esc(r.song) : '') + '</h3>' +
-        (res.length ? res.map(function (b, i) { return (i + 1) + '位 ' + esc(b.name) + '（' + sec(b.ms) + '秒）'; }).join(' / ') : '回答なし') + '</div>';
+        (res.length ? res.map(function (b, i) { return (i + 1) + '位 No.' + b.teamId + ' ' + esc(b.name) + '（' + sec(b.ms) + '秒）'; }).join(' / ') : '回答なし') + '</div>';
     }).join('') : 'まだありません';
   }
 
@@ -368,7 +370,7 @@ function baseUrl() {
       await new Promise(function (r) { setTimeout(r, 800); });   // 送信途中の押下を待つ
       const snap = await ROOT.child('buzzes/' + n).once('value');
       const ranking = computeRanking(snap.val(), s.startAt, teams);
-      await ROOT.child('histData/' + n).set({
+      await ROOT.child('history/' + n).set({
         roundNo: n, startAt: s.startAt, song: songOf(n),
         results: ranking.map(function (r) { return { teamId: r.teamId, name: r.name, ms: r.ms }; })
       });
@@ -383,8 +385,15 @@ function baseUrl() {
     const n = state.roundNo, u = {};
     u['state/roundNo'] = Math.max(0, n - 1); u['state/status'] = 'idle'; u['state/reveal'] = '';
     u['state/startAt'] = 0; u['state/endAt'] = 0;
-    u['buzzes/' + n] = null; u['histData/' + n] = null;
+    u['buzzes/' + n] = null; u['history/' + n] = null;
     ROOT.update(u).catch(fail);
+  };
+  $('btnBackTo1').onclick = function () {
+    if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
+    if (!confirm('問題番号を第1問に戻します。\n参加チームはそのまま残り、これまでの順位記録（結果履歴）は消えます。\n必要なら先に「CSVダウンロード」で保存してください。\n\nよろしいですか？')) return;
+    const u = { buzzes: null, history: null };
+    u['state/roundNo'] = 0; u['state/status'] = 'idle'; u['state/reveal'] = ''; u['state/startAt'] = 0; u['state/endAt'] = 0;
+    ROOT.update(u).then(function () { toast('第1問に戻しました'); }, fail);
   };
   document.addEventListener('keydown', function (e) {
     if (!$('kbd').checked || e.code !== 'Space' || $('main').hidden) return;
@@ -444,7 +453,7 @@ function baseUrl() {
   };
   $('btnReset').onclick = function () {
     if (!confirm('参加チーム（チーム名を含む）・問題番号・結果履歴をすべてリセットします（タイトルは残ります）。よろしいですか？')) return;
-    const u = { buzzes: null, histData: null };
+    const u = { buzzes: null, history: null };
     const d = defaultState(); d.title = state.title; d.showQr = state.showQr;
     u.state = d;
     u.teams = null;
@@ -453,13 +462,13 @@ function baseUrl() {
 
   /* ---- CSV ---- */
   $('btnCsv').onclick = function () {
-    const rows = [['問題', '順位', 'チーム', '秒', '曲名']];
+    const rows = [['問題', '順位', 'チームNo', 'チーム', '秒', '曲名']];
     Object.keys(histData).map(function (k) { return histData[k]; }).filter(Boolean)
       .sort(function (a, b) { return a.roundNo - b.roundNo; })
       .forEach(function (r) {
         const res = Object.values(r.results || {});
-        if (!res.length) rows.push([r.roundNo, '-', '（回答なし）', '', r.song || '']);
-        res.forEach(function (b, i) { rows.push([r.roundNo, i + 1, b.name, sec(b.ms), r.song || '']); });
+        if (!res.length) rows.push([r.roundNo, '-', '', '（回答なし）', '', r.song || '']);
+        res.forEach(function (b, i) { rows.push([r.roundNo, i + 1, b.teamId, b.name, sec(b.ms), r.song || '']); });
       });
     const csv = '﻿' + rows.map(function (r) { return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
     const a = document.createElement('a');
