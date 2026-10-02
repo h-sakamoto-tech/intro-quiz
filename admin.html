@@ -43,6 +43,7 @@
   .url { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
   .url code { flex: 1; background: #f3f4f8; padding: 6px 8px; border-radius: 6px; font-size: 12px; word-break: break-all; }
   .danger { color: #c4122a; border-color: #e7a4ad; }
+  .openScreen { background: #ffd84d; color: #1d2333; border: none; font-weight: 800; padding: 8px 16px; }
   .finish { background: #1d2333; color: #ffd84d; font-weight: 800; border-color: #1d2333; }
   .song { margin-top: 12px; padding: 12px; background: #fff7e0; border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
   #songName { font-size: 18px; font-weight: 800; }
@@ -60,6 +61,7 @@
     <span class="sp"></span>
     <span id="conn" hidden>再接続中…</span>
     <span id="joinedHead"></span>
+    <button id="btnOpenScreen" class="openScreen">スクリーンを表示 ↗</button>
   </header>
 
   <div id="login" class="card">
@@ -121,7 +123,7 @@
       <div class="url"><input type="text" id="titleIn"><button id="btnTitle">タイトル保存</button></div>
       <label><input type="checkbox" id="showQr"> スクリーンにQRコードを表示</label>
       <h2 style="margin-top:20px">URL</h2>
-      <div class="url"><span style="width:80px">スクリーン</span><code id="urlScreen"></code><button data-copy="urlScreen">コピー</button></div>
+      <div class="url"><span style="width:80px">スクリーン</span><code id="urlScreen"></code><button data-copy="urlScreen">コピー</button><button id="btnOpenScreen2">開く</button></div>
       <div class="url"><span style="width:80px">参加者</span><code id="urlPlayer"></code><button data-copy="urlPlayer">コピー</button></div>
     </div>
 
@@ -394,6 +396,12 @@ function baseUrl() {
     u['buzzes/' + n] = null; u['history/' + n] = null;
     ROOT.update(u).catch(fail);
   };
+  function openScreen() {
+    const w = window.open(baseUrl() + 'screen.html', 'introQuizScreen');
+    if (!w) toast('ポップアップがブロックされました。URL欄の「開く」かコピーしたURLで開いてください');
+  }
+  $('btnOpenScreen').onclick = openScreen;
+  $('btnOpenScreen2').onclick = openScreen;
   $('btnFinish').onclick = function () {
     if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
     if (!confirm('クイズを終了し、スクリーンに終了画面を表示します。よろしいですか？\n（あとから「待機画面へ」や「スタート」で再開することもできます）')) return;
