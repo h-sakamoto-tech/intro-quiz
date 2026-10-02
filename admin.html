@@ -44,6 +44,7 @@
   .url code { flex: 1; background: #f3f4f8; padding: 6px 8px; border-radius: 6px; font-size: 12px; word-break: break-all; }
   .danger { color: #c4122a; border-color: #e7a4ad; }
   .openScreen { background: #ffd84d; color: #1d2333; border: none; font-weight: 800; padding: 8px 16px; }
+  .ready { background: #d6142a; color: #fff; font-weight: 800; border-color: #d6142a; }
   .finish { background: #1d2333; color: #ffd84d; font-weight: 800; border-color: #1d2333; }
   .song { margin-top: 12px; padding: 12px; background: #fff7e0; border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
   #songName { font-size: 18px; font-weight: 800; }
@@ -80,6 +81,7 @@
       </div>
       <div class="subRow">
         <button id="btnIdle">待機画面（QR・参加状況）へ</button>
+        <button id="btnReady" class="ready">「まもなく開始」を表示</button>
         <button id="btnCancel" class="danger">この問題をやり直し</button>
         <button id="btnFinish" class="finish">クイズ終了</button>
         <button id="btnPrev">◀ 前の問題に戻る</button>
@@ -303,11 +305,12 @@ function baseUrl() {
     $('joinedHead').textContent = '参加 ' + joined + ' / ' + teams.length;
     $('stRound').textContent = s.roundNo ? '第' + s.roundNo + '問' : '開始前';
     $('stBadge').className = s.status;
-    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了', finished: 'クイズ終了' }[s.status] || s.status;
+    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了', finished: 'クイズ終了', ready: 'まもなく開始' }[s.status] || s.status;
     $('btnStart').disabled = s.status === 'open';
     $('btnStop').disabled = s.status !== 'open';
     $('btnStart').textContent = '▶ 第' + (s.status === 'open' ? s.roundNo : s.roundNo + 1) + '問 スタート（演奏開始）';
-    $('btnCancel').disabled = s.status === 'idle';
+    $('btnCancel').disabled = s.status === 'idle' || s.status === 'ready' || s.status === 'finished';
+    $('btnReady').disabled = s.status === 'open' || s.status === 'ready';
     $('btnFinish').disabled = s.status === 'open' || s.status === 'finished';
     $('btnPrev').disabled = s.status === 'open' || s.roundNo < 1;
     $('btnPrev').textContent = s.roundNo >= 1 && s.status !== 'open' ? '◀ 前の問題に戻る（次を第' + s.roundNo + '問に）' : '◀ 前の問題に戻る';
@@ -333,9 +336,10 @@ function baseUrl() {
       }).join('');
     }
 
-    const songNo = s.status === 'idle' ? s.roundNo + 1 : s.roundNo;
+    const beforeNext = s.status === 'idle' || s.status === 'ready';
+    const songNo = beforeNext ? s.roundNo + 1 : s.roundNo;
     const song = songOf(songNo);
-    $('songLabel').textContent = '第' + songNo + '問の曲（司会用）' + (s.status === 'idle' ? ' ※次の問題' : '');
+    $('songLabel').textContent = '第' + songNo + '問の曲（司会用）' + (beforeNext ? ' ※次の問題' : '');
     $('songName').textContent = song || '（曲リスト未入力）';
     $('btnReveal').disabled = s.status !== 'closed' || !song || !!s.reveal;
     $('btnHide').disabled = !s.reveal;
@@ -356,7 +360,7 @@ function baseUrl() {
   }
 
   function tick() {
-    if (state.startAt && state.status !== 'idle') {
+    if (state.startAt && (state.status === 'open' || state.status === 'closed')) {
       const ms = state.status === 'open' ? serverNow() - state.startAt : (state.endAt || serverNow()) - state.startAt;
       $('stTimer').textContent = sec(ms);
     } else { $('stTimer').textContent = '0.00'; }
@@ -387,6 +391,7 @@ function baseUrl() {
 
   $('btnStart').onclick = startRound;
   $('btnStop').onclick = function () { if (state.status === 'open') { closing = true; closeRound(); } };
+  $('btnReady').onclick = function () { ROOT.child('state').update({ status: 'ready', reveal: '' }).catch(fail); };
   $('btnIdle').onclick = function () { ROOT.child('state').update({ status: 'idle', reveal: '' }).catch(fail); };
   $('btnCancel').onclick = function () {
     if (!confirm('この問題の結果を破棄して、問題番号を1つ戻します。よろしいですか？')) return;

@@ -220,7 +220,7 @@ function baseUrl() {
 
     $('viewEntry').hidden = true; $('viewMain').hidden = false;
     $('teamLabel').textContent = 'No.' + myTeam + '  ' + myName();
-    $('roundLabel').textContent = state.roundNo > 0 && state.status !== 'idle' ? '第' + state.roundNo + '問' : '';
+    $('roundLabel').textContent = state.roundNo > 0 && (state.status === 'open' || state.status === 'closed') ? '第' + state.roundNo + '問' : '';
 
     const ranking = computeRanking(buzzes, state.startAt, teams);
     const idx = ranking.findIndex(function (b) { return b.teamId === myTeam; });
@@ -237,6 +237,8 @@ function baseUrl() {
       if (mine) { btn.className = 'done'; btn.innerHTML = (idx + 1) + '位<small>' + sec(mine.ms) + ' 秒</small>'; msg = '受付終了'; }
       else { btn.textContent = '終了'; msg = '受付終了<br><small>次の問題をお待ちください</small>'; }
       if (state.reveal) msg += '<br><small>正解：' + esc(state.reveal) + '</small>';
+    } else if (state.status === 'ready') {
+      btn.textContent = 'まもなく'; msg = 'まもなくクイズが始まります！<br><small>演奏が始まるとボタンが赤くなります</small>';
     } else if (state.status === 'finished') {
       btn.textContent = '終了'; msg = 'クイズは終了しました<br><small>ご参加ありがとうございました！</small>';
     } else {
