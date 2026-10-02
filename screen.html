@@ -418,8 +418,8 @@ function baseUrl() {
 
     if (!ranking.length) {
       $('tiles').className = '';
-      $('tiles').innerHTML = '<div id="waitMsg">' + (s.status === 'open'
-        ? '曲名がわかったら<br><em>「わかった！」</em>ボタン！' : '回答なし') + '</div>';
+      $('tiles').innerHTML = '<div id="waitMsg"><div>' + (s.status === 'open'
+        ? '曲名がわかったら<br><em>「わかった！」</em>ボタン！' : '回答なし') + '</div></div>';
       return;
     }
     // 既存タイルは再アニメーションさせず、新しく増えたタイルだけポップさせる
