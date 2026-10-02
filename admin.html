@@ -91,13 +91,13 @@
     </div>
 
     <div class="card">
-      <h2>アンサー順位（リアルタイム）</h2>
+      <h2>「わかった！」順位（リアルタイム）</h2>
       <table><thead><tr><th>順位</th><th>チーム</th><th style="text-align:right">秒</th><th style="text-align:right">差</th></tr></thead>
         <tbody id="rankBody"></tbody></table>
     </div>
 
     <div class="card">
-      <h2>チーム（名前を編集して保存）</h2>
+      <h2>参加チーム（参加者がスマホで入力・ここで修正も可）</h2>
       <table><thead><tr><th>#</th><th>チーム名</th><th>状態</th><th></th></tr></thead><tbody id="teamBody"></tbody></table>
       <div class="subRow" style="margin-top:10px">
         <button id="btnSaveNames">チーム名を保存</button>
@@ -128,7 +128,7 @@
         <button id="btnSimBuzz">ダミーチームが押す（受付中のみ）</button>
       </div>
       <div class="subRow" style="margin-top:8px">
-        <button id="btnReset" class="danger">全リセット（チーム名・タイトルは保持）</button>
+        <button id="btnReset" class="danger">全リセット（参加チームも消去）</button>
       </div>
       <p class="muted">本番前に「全リセット」でダミー参加と履歴を消してください。</p>
     </div>
@@ -316,7 +316,8 @@ function baseUrl() {
     if (sig !== teamSig && !namesDirty) {
       teamSig = sig;
       $('teamBody').innerHTML = teams.map(function (t) {
-        return '<tr><td>' + t.id + '</td><td><input type="text" class="nameIn" maxlength="30" value="' + esc(t.name) + '"></td>' +
+        if (!t.joined) return '<tr><td>' + t.id + '</td><td class="off">（空き）<input type="hidden" class="nameIn" data-id="' + t.id + '" value=""></td><td></td><td></td></tr>';
+        return '<tr><td>' + t.id + '</td><td><input type="text" class="nameIn" data-id="' + t.id + '" maxlength="20" value="' + esc(t.name) + '"></td>' +
           '<td class="' + (t.joined ? 'on' : 'off') + '">' + (t.joined ? '参加中' : '未参加') + '</td>' +
           '<td>' + (t.joined ? '<button data-kick="' + t.id + '">解除</button>' : '') + '</td></tr>';
       }).join('');
@@ -399,20 +400,20 @@ function baseUrl() {
   $('teamBody').addEventListener('input', function () { namesDirty = true; });
   $('teamBody').addEventListener('click', function (e) {
     const id = e.target.dataset.kick;
-    if (id && confirm('チーム' + id + ' の参加を解除しますか？')) ROOT.child('teams/' + id + '/device').set('').catch(fail);
+    if (id && confirm('チーム' + id + ' の参加を解除しますか？')) ROOT.child('teams/' + id).remove().catch(fail);
   });
   $('btnSaveNames').onclick = function () {
     const u = {};
-    document.querySelectorAll('.nameIn').forEach(function (inp, i) {
-      u[(i + 1) + '/name'] = inp.value.trim().slice(0, 30) || ('チーム' + (i + 1));
+    document.querySelectorAll('.nameIn').forEach(function (inp) {
+      const id = Number(inp.dataset.id);
+      const t = teams.find(function (x) { return x.id === id; });
+      if (t && t.joined) u[id + '/name'] = inp.value.trim().slice(0, 20) || ('チーム' + id);
     });
     ROOT.child('teams').update(u).then(function () { namesDirty = false; teamSig = ''; render(); toast('チーム名を保存しました'); }, fail);
   };
   $('btnKickAll').onclick = function () {
     if (!confirm('全チームの参加を解除しますか？')) return;
-    const u = {};
-    for (let i = 1; i <= TEAM_COUNT; i++) u[i + '/device'] = '';
-    ROOT.child('teams').update(u).catch(fail);
+    ROOT.child('teams').remove().catch(fail);
   };
 
   /* ---- 設定 ---- */
@@ -428,7 +429,7 @@ function baseUrl() {
   /* ---- リハーサル / リセット ---- */
   $('btnSimJoin').onclick = function () {
     const u = {};
-    teams.forEach(function (t) { if (!t.joined) u[t.id + '/device'] = 'SIM-' + t.id; });
+    teams.forEach(function (t) { if (!t.joined) u[t.id] = { name: 'ダミー' + t.id, device: 'SIM-' + t.id, joinedAt: Date.now() }; });
     ROOT.child('teams').update(u).catch(fail);
   };
   $('btnSimBuzz').onclick = function () {
@@ -442,11 +443,11 @@ function baseUrl() {
     ROOT.child('buzzes').update(u).catch(fail);
   };
   $('btnReset').onclick = function () {
-    if (!confirm('参加状況・問題番号・結果履歴をすべてリセットします（チーム名とタイトルは残ります）。よろしいですか？')) return;
+    if (!confirm('参加チーム（チーム名を含む）・問題番号・結果履歴をすべてリセットします（タイトルは残ります）。よろしいですか？')) return;
     const u = { buzzes: null, histData: null };
     const d = defaultState(); d.title = state.title; d.showQr = state.showQr;
     u.state = d;
-    for (let i = 1; i <= TEAM_COUNT; i++) u['teams/' + i + '/device'] = '';
+    u.teams = null;
     ROOT.update(u).then(function () { toast('リセットしました'); }, fail);
   };
 

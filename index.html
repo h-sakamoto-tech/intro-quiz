@@ -13,38 +13,36 @@
   body { display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; }
   header { padding: 12px 16px; background: #1b2030; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   #title { font-weight: 700; font-size: 15px; opacity: .8; }
-  #teamLabel { font-weight: 800; font-size: 18px; color: #ffd84d; }
+  #teamLabel { font-weight: 800; font-size: 18px; color: #ffd84d; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #conn { font-size: 11px; color: #ff7b7b; }
   main { flex: 1; display: flex; flex-direction: column; padding: 16px; }
   [hidden] { display: none !important; }
 
-  h2 { font-size: 20px; margin: 4px 0 14px; text-align: center; }
-  #teamGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .teamBtn { border: 2px solid #3b4460; background: #222842; color: #fff; border-radius: 12px; padding: 14px 8px; font-size: 16px; font-weight: 700; }
-  .teamBtn small { display: block; font-size: 11px; font-weight: 400; opacity: .7; margin-top: 4px; }
-  .teamBtn.taken { border-color: #6b4a4a; background: #2a2026; opacity: .75; }
+  #viewEntry { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; max-width: 420px; width: 100%; margin: 0 auto; }
+  #viewEntry h2 { font-size: 22px; margin: 0; text-align: center; }
+  #viewEntry p { margin: 0; text-align: center; font-size: 14px; opacity: .75; line-height: 1.5; }
+  #nameIn { width: 100%; font-size: 22px; padding: 16px; border-radius: 12px; border: 2px solid #ffd84d; background: #0b0e16; color: #fff; text-align: center; -webkit-user-select: text; user-select: text; }
+  #joinBtn { font-size: 22px; font-weight: 800; padding: 16px; border: none; border-radius: 12px; color: #fff;
+    background: linear-gradient(135deg, #ff4b5c, #d6142a); box-shadow: 0 6px 0 #8e0b1b; }
+  #joinBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 #8e0b1b; }
+  #joinBtn:disabled { opacity: .5; }
+  #cancelEdit { background: none; border: none; color: #8fa4ff; font-size: 15px; text-decoration: underline; }
+  #entryMsg { color: #ff9b9b; min-height: 1.4em; opacity: 1 !important; }
 
   #viewMain { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
   #roundLabel { font-size: 22px; font-weight: 700; opacity: .85; min-height: 1.4em; }
-  #buzz { width: 78vw; height: 78vw; max-width: 380px; max-height: 380px; border-radius: 50%; border: none;
-    font-size: 44px; font-weight: 900; color: #fff; background: #3a3f52; box-shadow: 0 10px 0 #24283a; touch-action: manipulation; }
+  #buzz { width: 80vw; height: 80vw; max-width: 380px; max-height: 380px; border-radius: 50%; border: none;
+    font-size: 46px; font-weight: 900; color: #fff; background: #3a3f52; box-shadow: 0 10px 0 #24283a; touch-action: manipulation; line-height: 1.2; }
   #buzz.ready { background: radial-gradient(circle at 35% 30%, #ff6b6b, #d6142a 70%);
     box-shadow: 0 12px 0 #8e0b1b, 0 0 40px rgba(255,60,60,.5); animation: pulse 1s infinite; }
   #buzz.ready:active { transform: translateY(8px); box-shadow: 0 4px 0 #8e0b1b; }
   #buzz.done { background: radial-gradient(circle at 35% 30%, #ffe27a, #e0a800 70%); color: #3a2a00; box-shadow: 0 10px 0 #9c7500; }
-  #buzz.sending { background: #6b5d2a; }
+  #buzz.sending { background: #6b5d2a; font-size: 30px; }
+  #buzz small { display: block; font-size: 18px; font-weight: 700; }
   @keyframes pulse { 50% { box-shadow: 0 12px 0 #8e0b1b, 0 0 70px rgba(255,60,60,.85); } }
   #msg { font-size: 20px; text-align: center; min-height: 2.6em; line-height: 1.3; }
   .link { background: none; border: none; color: #8fa4ff; font-size: 14px; text-decoration: underline; padding: 8px; }
-
   #loading { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 18px; opacity: .7; }
-  #modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; padding: 24px; }
-  #modal .box { background: #222842; border-radius: 14px; padding: 20px; max-width: 360px; width: 100%; }
-  #modal p { margin: 0 0 16px; line-height: 1.5; }
-  #modal .row { display: flex; gap: 10px; }
-  #modal button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 16px; font-weight: 700; }
-  #modalOk { background: #d6142a; color: #fff; }
-  #modalCancel { background: #3b4460; color: #fff; }
 </style>
 </head>
 <body>
@@ -55,23 +53,23 @@
   </header>
   <main>
     <div id="loading">接続中…</div>
-    <section id="viewSelect" hidden>
-      <h2>あなたのチームを選んでください</h2>
-      <div id="teamGrid"></div>
+
+    <section id="viewEntry" hidden>
+      <h2 id="entryTitle">チーム名を入力してください</h2>
+      <p id="entryNote">スクリーンにこの名前で表示されます</p>
+      <input id="nameIn" type="text" maxlength="20" placeholder="例）総務部チーム" autocomplete="off">
+      <button id="joinBtn">参加する</button>
+      <p id="entryMsg"></p>
+      <button id="cancelEdit" hidden>変更をやめる</button>
     </section>
+
     <section id="viewMain" hidden>
       <div id="roundLabel"></div>
       <button id="buzz" disabled>待機中</button>
       <div id="msg"></div>
-      <button id="changeTeam" class="link">チームを変更する</button>
+      <button id="editName" class="link">チーム名を変更する</button>
     </section>
   </main>
-  <div id="modal" hidden>
-    <div class="box">
-      <p id="modalText"></p>
-      <div class="row"><button id="modalCancel">やめる</button><button id="modalOk">OK</button></div>
-    </div>
-  </div>
 
 <script>
 /* =========================================================
@@ -175,18 +173,8 @@ function baseUrl() {
     LS.set('iq_device', deviceId);
   }
 
-  let state = null, teams = null, buzzes = {}, myTeam = 0;
-  let pressedRound = -1, subRound = null, buzzRef = null, gridSig = '', notice = '';
-
-  function confirmBox(text, okOnly) {
-    return new Promise(function (resolve) {
-      $('modalText').textContent = text;
-      $('modalCancel').hidden = !!okOnly;
-      $('modal').hidden = false;
-      $('modalOk').onclick = function () { $('modal').hidden = true; resolve(true); };
-      $('modalCancel').onclick = function () { $('modal').hidden = true; resolve(false); };
-    });
-  }
+  let state = null, teams = null, buzzes = {}, myTeam = 0, editing = false;
+  let pressedRound = -1, subRound = null, buzzRef = null, notice = '';
 
   onConnection(function (ok) { $('conn').hidden = ok; });
 
@@ -206,12 +194,12 @@ function baseUrl() {
     const mine = teams.find(function (t) { return t.device === deviceId; });
     const prev = myTeam;
     myTeam = mine ? mine.id : 0;
-    if (prev && !myTeam) notice = 'チームの参加が解除されました';
+    if (prev && !myTeam) { notice = 'チームの参加が解除されました。もう一度チーム名を入力してください。'; editing = false; }
     render();
   });
 
-  function teamName(id) {
-    const t = teams && teams.find(function (x) { return x.id === id; });
+  function myName() {
+    const t = teams && teams.find(function (x) { return x.id === myTeam; });
     return t ? t.name : '';
   }
 
@@ -220,22 +208,18 @@ function baseUrl() {
     $('loading').hidden = true;
     $('title').textContent = state.title;
 
-    if (!myTeam) {
-      $('viewMain').hidden = true; $('viewSelect').hidden = false; $('teamLabel').textContent = '';
-      if (notice) { const n = notice; notice = ''; confirmBox(n, true); }
-      const sig = JSON.stringify(teams.map(function (t) { return [t.name, t.joined]; }));
-      if (sig !== gridSig) {
-        gridSig = sig;
-        $('teamGrid').innerHTML = teams.map(function (t) {
-          return '<button class="teamBtn' + (t.joined ? ' taken' : '') + '" data-id="' + t.id + '" data-joined="' + (t.joined ? 1 : 0) + '">' +
-            esc(t.name) + '<small>' + (t.joined ? '参加中（他の端末）' : 'タップして参加') + '</small></button>';
-        }).join('');
-      }
+    if (!myTeam || editing) {
+      $('viewMain').hidden = true; $('viewEntry').hidden = false;
+      $('teamLabel').textContent = myTeam ? myName() : '';
+      $('entryTitle').textContent = myTeam ? 'チーム名を変更' : 'チーム名を入力してください';
+      $('joinBtn').textContent = myTeam ? '変更する' : '参加する';
+      $('cancelEdit').hidden = !myTeam;
+      if (notice) { $('entryMsg').textContent = notice; notice = ''; }
       return;
     }
 
-    $('viewSelect').hidden = true; $('viewMain').hidden = false;
-    $('teamLabel').textContent = teamName(myTeam);
+    $('viewEntry').hidden = true; $('viewMain').hidden = false;
+    $('teamLabel').textContent = myName();
     $('roundLabel').textContent = state.roundNo > 0 && state.status !== 'idle' ? '第' + state.roundNo + '問' : '';
 
     const ranking = computeRanking(buzzes, state.startAt, teams);
@@ -246,11 +230,11 @@ function baseUrl() {
     let msg = '';
 
     if (state.status === 'open') {
-      if (mine) { btn.className = 'done'; btn.textContent = (idx + 1) + '位'; msg = sec(mine.ms) + ' 秒'; }
+      if (mine) { btn.className = 'done'; btn.innerHTML = (idx + 1) + '位<small>' + sec(mine.ms) + ' 秒</small>'; msg = idx === 0 ? 'マイクが来たら曲名を答えてください！' : '押しました！'; }
       else if (pressedRound === state.roundNo) { btn.className = 'sending'; btn.textContent = '送信中…'; msg = 'そのままお待ちください'; }
-      else { btn.className = 'ready'; btn.disabled = false; btn.textContent = 'ANSWER!'; msg = '分かったら押す！'; }
+      else { btn.className = 'ready'; btn.disabled = false; btn.textContent = 'わかった！'; msg = '曲名がわかったら押す！'; }
     } else if (state.status === 'closed') {
-      if (mine) { btn.className = 'done'; btn.textContent = (idx + 1) + '位'; msg = sec(mine.ms) + ' 秒<br><small>受付終了</small>'; }
+      if (mine) { btn.className = 'done'; btn.innerHTML = (idx + 1) + '位<small>' + sec(mine.ms) + ' 秒</small>'; msg = '受付終了'; }
       else { btn.textContent = '終了'; msg = '受付終了<br><small>次の問題をお待ちください</small>'; }
       if (state.reveal) msg += '<br><small>正解：' + esc(state.reveal) + '</small>';
     } else {
@@ -260,38 +244,40 @@ function baseUrl() {
     $('msg').innerHTML = msg;
   }
 
-  /* チーム選択 */
-  $('teamGrid').addEventListener('click', async function (ev) {
-    const b = ev.target.closest('.teamBtn');
-    if (!b) return;
-    const id = Number(b.dataset.id);
-    const taken = b.dataset.joined === '1';
-    const ok = await confirmBox(taken
-      ? '「' + teamName(id) + '」は別の端末が参加中です。この端末に引き継ぎますか？'
-      : '「' + teamName(id) + '」で参加します。よろしいですか？');
-    if (!ok) return;
+  /* 参加・チーム名変更 */
+  async function submitName() {
+    const name = $('nameIn').value.replace(/\s+/g, ' ').trim().slice(0, 20);
+    if (!name) { $('entryMsg').textContent = 'チーム名を入力してください'; return; }
+    const dup = teams.some(function (t) { return t.joined && t.id !== myTeam && t.name === name; });
+    if (dup) { $('entryMsg').textContent = '同じ名前のチームがすでにあります。別の名前にしてください。'; return; }
+    $('joinBtn').disabled = true; $('entryMsg').textContent = '';
     try {
-      const prev = myTeam;
-      const r = await ROOT.child('teams/' + id + '/device').transaction(function (cur) {
-        if (cur && cur !== deviceId && !taken) return;   // 直前に他の端末が参加 → 中止
-        return deviceId;
-      });
-      if (!r.committed) { await confirmBox('他の端末が先に参加しました。もう一度選んでください。', true); return; }
-      if (prev && prev !== id) {
-        ROOT.child('teams/' + prev + '/device').transaction(function (cur) { return cur === deviceId ? '' : undefined; });
+      if (myTeam) {
+        await ROOT.child('teams/' + myTeam + '/name').set(name);
+        editing = false;
+      } else {
+        let ok = false;
+        for (let i = 1; i <= TEAM_COUNT && !ok; i++) {
+          const r = await ROOT.child('teams/' + i).transaction(function (cur) {
+            if (cur && cur.device && cur.device !== deviceId) return;   // 使用中の枠
+            return { name: name, device: deviceId, joinedAt: Date.now() };
+          });
+          ok = r.committed;
+        }
+        if (!ok) $('entryMsg').textContent = '参加チームが上限（' + TEAM_COUNT + 'チーム）に達しています。係の人に声をかけてください。';
       }
-    } catch (e) { await confirmBox('通信に失敗しました。もう一度お試しください。', true); }
-  });
-
-  $('changeTeam').addEventListener('click', async function () {
-    if (!(await confirmBox('チームの参加を解除して選び直しますか？'))) return;
-    const id = myTeam;
-    myTeam = 0; gridSig = '';
-    try { await ROOT.child('teams/' + id + '/device').transaction(function (cur) { return cur === deviceId ? '' : undefined; }); } catch (e) {}
+    } catch (e) {
+      $('entryMsg').textContent = '通信に失敗しました。もう一度お試しください。';
+    }
+    $('joinBtn').disabled = false;
     render();
-  });
+  }
+  $('joinBtn').addEventListener('click', submitName);
+  $('nameIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submitName(); } });
+  $('editName').addEventListener('click', function () { editing = true; $('nameIn').value = myName(); $('entryMsg').textContent = ''; render(); });
+  $('cancelEdit').addEventListener('click', function () { editing = false; render(); });
 
-  /* アンサー */
+  /* わかった！ */
   async function doBuzz(ev) {
     if (ev) ev.preventDefault();
     if (!state || state.status !== 'open' || pressedRound === state.roundNo || !myTeam) return;
@@ -302,7 +288,7 @@ function baseUrl() {
     render();
     try {
       await ROOT.child('buzzes/' + round + '/' + myTeam).transaction(function (cur) {
-        if (cur) return;                  // 既に押下済み
+        if (cur) return;
         return { at: at, recv: TS, device: deviceId };
       });
     } catch (e) {
