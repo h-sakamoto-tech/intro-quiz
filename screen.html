@@ -195,7 +195,7 @@
   </section>
 
   <div id="burst" hidden><div class="bq" id="burstQ"></div><div class="bs">START!</div></div>
-  <div id="starter">クリックして開始（効果音ON）<small>ブラウザを全画面表示（F11）にしてください</small></div>
+  <div id="starter">クリックして開始（BGM ON）<small>ブラウザを全画面表示（F11）にしてください</small></div>
   <div id="conn" hidden>再接続中…</div>
 
 <script>
@@ -293,31 +293,18 @@ function baseUrl() {
   const APP_URL = baseUrl();
   let state = defaultState(), teams = teamList({}), buzzes = {};
   let subRound = null, buzzRef = null, lastBuzzCount = 0, lastRound = -1, tilesSig = '', chipsSig = '';
-  let audio = null, firstState = true, burstTimer = null, prevStatus = null, prevRound = null;
+  let firstState = true, burstTimer = null, prevStatus = null, prevRound = null;
 
   if (typeof QRCode !== 'undefined') {
     new QRCode($('qr'), { text: APP_URL, width: 600, height: 600, correctLevel: QRCode.CorrectLevel.M });
     new QRCode($('qrReady'), { text: APP_URL, width: 260, height: 260, correctLevel: QRCode.CorrectLevel.M });
   } else { $('qr').textContent = APP_URL; }
 
-  /* ---- 効果音 ---- */
-  function tone(freq, start, dur, type, vol) {
-    if (!audio) return;
-    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + start;
-    o.type = type || 'square'; o.frequency.value = freq;
-    g.gain.setValueAtTime(vol || 0.15, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g); g.connect(audio.destination);
-    o.start(t); o.stop(t + dur);
-  }
-  function fanfare() { [523, 659, 784, 1047].forEach(function (f, i) { tone(f, i * 0.11, i === 3 ? 0.6 : 0.14, 'square', 0.13); }); }
-  function buzzSound(first) { if (first) { tone(1320, 0, 0.18); tone(1760, 0.16, 0.35); } else tone(880, 0, 0.12, 'triangle', 0.2); }
+  /* ---- 音はすべて管理画面からアップロードしたBGMのみ（内蔵の効果音なし） ---- */
   $('starter').addEventListener('click', function () {
-    try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
     try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch (e) {}
     $('starter').hidden = true;
-    tone(880, 0, 0.15);
-    audioUnlocked = true; updateBgm();
+    audioUnlocked = true; bgmActiveKey = ''; updateBgm();
   });
 
   /* ---- 終了演出 ---- */
@@ -332,45 +319,71 @@ function baseUrl() {
     $('confettiBox').innerHTML = html;
   }
 
-  /* ---- QR表示画面のBGM ---- */
-  const bgm = new Audio(); bgm.loop = true; bgm.preload = 'auto';
-  let bgmMeta = null, bgmVer = null, bgmUrl = null, audioUnlocked = false, bgmFade = null, bgmRestart = true;
-  ROOT.child('bgm/idle/meta').on('value', async function (s) {
-    bgmMeta = s.val();
-    if (!bgmMeta) { bgmVer = null; stopBgm(true); bgm.removeAttribute('src'); return; }
-    if (bgmMeta.version !== bgmVer) {
-      bgmVer = bgmMeta.version;
-      try {
-        const d = (await ROOT.child('bgm/idle/data').once('value')).val() || {};
-        let b64 = '';
-        for (let i = 0; i < bgmMeta.chunks; i++) b64 += d[i] || '';
-        const bin = atob(b64), bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        if (bgmUrl) URL.revokeObjectURL(bgmUrl);
-        bgmUrl = URL.createObjectURL(new Blob([bytes], { type: bgmMeta.type || 'audio/mpeg' }));
-        stopBgm(true); bgm.src = bgmUrl; bgmRestart = true;
-      } catch (e) { console.error('BGM load error', e); }
-    }
-    updateBgm();
+  /* ---- BGM（画面ごとに管理画面からアップロード） ----
+   * idle: QR表示画面 / ready: ルール説明画面 / round: 第〇問（スタートから受付終了まで） / finish: クイズ終了画面 */
+  const BGM_SLOTS = ['idle', 'ready', 'round', 'finish'];
+  const bgmS = {};
+  let audioUnlocked = false, bgmActiveKey = '';
+  BGM_SLOTS.forEach(function (k) {
+    const a = new Audio(); a.preload = 'auto';
+    bgmS[k] = { audio: a, meta: null, ver: null, url: null, fade: null };
+    ROOT.child('bgm/' + k + '/meta').on('value', async function (snap) {
+      const o = bgmS[k];
+      o.meta = snap.val();
+      if (!o.meta) { o.ver = null; stopSlot(k, true); a.removeAttribute('src'); return; }
+      if (o.meta.version !== o.ver) {
+        o.ver = o.meta.version;
+        try {
+          const d = (await ROOT.child('bgm/' + k + '/data').once('value')).val() || {};
+          let b64 = '';
+          for (let i = 0; i < o.meta.chunks; i++) b64 += d[i] || '';
+          const bin = atob(b64), bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          if (o.url) URL.revokeObjectURL(o.url);
+          o.url = URL.createObjectURL(new Blob([bytes], { type: o.meta.type || 'audio/mpeg' }));
+          stopSlot(k, true); a.src = o.url; bgmActiveKey = '';
+        } catch (e) { console.error('BGM load error', k, e); }
+      }
+      updateBgm();
+    });
   });
-  function stopBgm(now) {
-    clearInterval(bgmFade);
-    if (bgm.paused) return;
-    if (now) { bgm.pause(); bgmRestart = true; return; }
-    bgmFade = setInterval(function () {
-      if (bgm.volume > 0.06) { bgm.volume = Math.max(0, bgm.volume - 0.06); }
-      else { clearInterval(bgmFade); bgm.pause(); bgmRestart = true; }
+  function stopSlot(k, now) {
+    const o = bgmS[k], a = o.audio;
+    clearInterval(o.fade);
+    if (a.paused) return;
+    if (now) { a.pause(); return; }
+    o.fade = setInterval(function () {
+      if (a.volume > 0.06) a.volume = Math.max(0, a.volume - 0.06);
+      else { clearInterval(o.fade); a.pause(); }
     }, 50);
   }
+  function currentSlot() {
+    const st = state.status;
+    if (st === 'idle') return 'idle';
+    if (st === 'ready') return 'ready';
+    if (st === 'open' || st === 'closed') return 'round';
+    if (st === 'finished') return 'finish';
+    return '';
+  }
   function updateBgm() {
-    const vol = bgmMeta && bgmMeta.vol != null ? bgmMeta.vol / 100 : 0.7;
-    const want = audioUnlocked && bgmMeta && bgmMeta.on !== false && state.status === 'idle' && bgm.getAttribute('src');
-    if (want) {
-      clearInterval(bgmFade);
-      bgm.volume = vol;
-      if (bgm.paused) { if (bgmRestart) { bgm.currentTime = 0; bgmRestart = false; } bgm.play().catch(function (e) { console.warn('BGM play', e); }); }
-    } else {
-      stopBgm(false);
+    if (!audioUnlocked) return;
+    const k = currentSlot();
+    // 第〇問は問題ごとに最初から（startAtで区別）
+    const key = k ? k + (k === 'round' ? ':' + state.startAt : '') : '';
+    BGM_SLOTS.forEach(function (x) { if (x !== k) stopSlot(x, false); });
+    if (!k) { bgmActiveKey = key; return; }
+    const o = bgmS[k], a = o.audio, m = o.meta;
+    const playable = m && m.on !== false && a.getAttribute('src');
+    if (!playable) { stopSlot(k, false); bgmActiveKey = key; return; }
+    a.loop = m.loop !== false;
+    clearInterval(o.fade);
+    a.volume = m.vol != null ? m.vol / 100 : 0.7;
+    if (key !== bgmActiveKey) {           // 画面が切り替わった → 最初から再生
+      bgmActiveKey = key;
+      a.currentTime = 0;
+      a.play().catch(function (e) { console.warn('BGM play', e); });
+    } else if (a.paused && a.loop) {
+      a.play().catch(function () {});
     }
   }
 
@@ -379,7 +392,6 @@ function baseUrl() {
     $('burstQ').textContent = '第' + n + '問';
     const b = $('burst');
     b.classList.remove('out'); b.hidden = true; void b.offsetWidth; b.hidden = false;
-    fanfare();
     clearTimeout(burstTimer);
     burstTimer = setTimeout(function () {
       b.classList.add('out');
@@ -415,14 +427,13 @@ function baseUrl() {
     if (s.status === 'finished') {
       $('idle').hidden = true; $('live').hidden = true; $('ready').hidden = true; $('finish').hidden = false;
       $('finishNote').textContent = s.roundNo > 0 ? '全 ' + s.roundNo + ' 問 ／ 参加 ' + joinedTeams.length + ' チーム' : '';
-      if (!finishShown) { finishShown = true; makeConfetti(); fanfare(); }
+      if (!finishShown) { finishShown = true; makeConfetti(); }
       return;
     }
     finishShown = false; $('finish').hidden = true;
     if (s.status === 'ready') {
       $('idle').hidden = true; $('live').hidden = true; $('ready').hidden = false;
       $('readyChip').textContent = s.roundNo === 0 ? 'まもなく開始！' : 'まもなく第' + (s.roundNo + 1) + '問！';
-      if (!readyShown) { readyShown = true; fanfare(); }
       return;
     }
     readyShown = false; $('ready').hidden = true;
@@ -447,13 +458,12 @@ function baseUrl() {
     $('roundNo').textContent = '第' + s.roundNo + '問';
     $('badge').className = s.status;
     $('badge').textContent = s.status === 'open' ? 'わかったら押せ！' : '受付終了';
-    if (s.reveal && $('reveal').hidden) tone(990, 0, 0.4);
     $('reveal').hidden = !s.reveal;
     $('revealText').textContent = s.reveal || '';
 
     const ranking = computeRanking(buzzes, s.startAt, teams);
     if (s.roundNo !== lastRound) { lastRound = s.roundNo; lastBuzzCount = 0; tilesSig = ''; }
-    if (ranking.length > lastBuzzCount) { buzzSound(lastBuzzCount === 0); lastBuzzCount = ranking.length; }
+    if (ranking.length > lastBuzzCount) lastBuzzCount = ranking.length;
 
     const sig = s.roundNo + ':' + s.status + ':' + JSON.stringify(ranking.map(function (r) { return [r.teamId, r.name, r.ms]; }));
     if (sig === tilesSig) return;

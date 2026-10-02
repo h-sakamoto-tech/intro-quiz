@@ -141,20 +141,13 @@
       <p class="muted">本番前に「全リセット」でダミー参加と履歴を消してください。</p>
     </div>
 
-    <div class="card">
-      <h2>QR表示画面のBGM</h2>
-      <div id="bgmInfo" class="muted">未設定</div>
+    <div class="card full">
+      <h2>BGM（画面ごとにアップロード）</h2>
+      <p class="muted" style="margin-top:-6px">音はここでアップロードした曲だけが流れます（内蔵の効果音はありません）。画面が切り替わると曲も切り替わり、毎回最初から流れます。mp3推奨・1曲15MBまで。</p>
       <input type="file" id="bgmFile" accept="audio/*,.mp3,.m4a,.wav" hidden>
-      <div class="subRow" style="margin-top:10px">
-        <button id="btnBgmUpload">QR表示画面のBGMをアップロード</button>
-        <button id="btnBgmDel" class="danger">削除</button>
-      </div>
-      <div class="subRow" style="margin-top:10px">
-        <label><input type="checkbox" id="bgmOn"> BGMを鳴らす</label>
-        <span style="margin-left:12px">音量</span><input type="range" id="bgmVol" min="0" max="100" step="5" style="width:160px"><span id="bgmVolTxt"></span>
-      </div>
+      <table><thead><tr><th>流す画面</th><th>現在の曲</th><th></th><th>再生</th><th>くり返し</th><th>音量</th></tr></thead>
+        <tbody id="bgmBody"></tbody></table>
       <div id="bgmProg" class="muted" style="margin-top:6px"></div>
-      <p class="muted">待機画面（QR表示）の間だけ、スクリーンでくり返し再生されます。画面が切り替わると止まり、待機画面に戻ると最初から流れます。（mp3推奨・15MBまで）</p>
     </div>
 
     <div class="card full">
@@ -301,7 +294,6 @@ function baseUrl() {
     });
     ROOT.child('teams').on('value', function (s) { teams = teamList(s.val()); render(); });
     ROOT.child('history').on('value', function (s) { histData = s.val() || {}; renderHistory(); });
-    ROOT.child('bgm/idle/meta').on('value', function (s) { bgmMeta = s.val(); renderBgm(); });
     tick();
   }
 
@@ -512,55 +504,90 @@ function baseUrl() {
     ROOT.update(u).then(function () { toast('リセットしました'); }, fail);
   };
 
-  /* ---- QR表示画面のBGM ---- */
-  let bgmMeta = null;
+  /* ---- BGM（画面ごと） ---- */
+  const BGM_DEF = [
+    { k: 'idle',   label: 'QR表示画面（待機・参加受付）', loop: true },
+    { k: 'ready',  label: 'イントロドン！説明画面', loop: true },
+    { k: 'round',  label: '第〇問（スタート〜受付終了）', loop: false },
+    { k: 'finish', label: 'クイズ終了画面', loop: true }
+  ];
   const BGM_CHUNK = 512 * 1024;
-  function renderBgm() {
-    const m = bgmMeta;
-    $('bgmInfo').textContent = m ? '現在のBGM：' + m.name + '（' + (m.size / 1024 / 1024).toFixed(1) + 'MB）' : '未設定（BGMなし）';
-    $('bgmInfo').className = m ? '' : 'muted';
-    $('btnBgmDel').disabled = !m;
-    $('bgmOn').disabled = !m; $('bgmVol').disabled = !m;
-    $('bgmOn').checked = !!(m && m.on !== false);
-    const v = m && m.vol != null ? m.vol : 70;
-    if (document.activeElement !== $('bgmVol')) $('bgmVol').value = v;
-    $('bgmVolTxt').textContent = ' ' + $('bgmVol').value + '%';
+  const bgmMetas = {};
+  let bgmTarget = null, bgmBuilt = false;
+  function buildBgmRows() {
+    $('bgmBody').innerHTML = BGM_DEF.map(function (d) {
+      return '<tr data-k="' + d.k + '"><td><b>' + d.label + '</b></td><td class="bname muted">未設定</td>' +
+        '<td style="white-space:nowrap"><button class="bup">アップロード</button> <button class="bdel danger">削除</button></td>' +
+        '<td><input type="checkbox" class="bon"></td><td><input type="checkbox" class="bloop"></td>' +
+        '<td style="white-space:nowrap"><input type="range" class="bvol" min="0" max="100" step="5" style="width:110px"> <span class="bvt"></span></td></tr>';
+    }).join('');
+    bgmBuilt = true;
   }
-  $('btnBgmUpload').onclick = function () { $('bgmFile').value = ''; $('bgmFile').click(); };
+  function renderBgm() {
+    if (!bgmBuilt) buildBgmRows();
+    BGM_DEF.forEach(function (d) {
+      const tr = document.querySelector('#bgmBody tr[data-k="' + d.k + '"]'), m = bgmMetas[d.k];
+      tr.querySelector('.bname').textContent = m ? m.name + '（' + (m.size / 1024 / 1024).toFixed(1) + 'MB）' : '未設定';
+      tr.querySelector('.bname').className = 'bname' + (m ? '' : ' muted');
+      ['.bdel', '.bon', '.bloop', '.bvol'].forEach(function (c) { tr.querySelector(c).disabled = !m; });
+      tr.querySelector('.bon').checked = !!(m && m.on !== false);
+      tr.querySelector('.bloop').checked = m ? m.loop !== false : d.loop;
+      const vol = tr.querySelector('.bvol');
+      if (document.activeElement !== vol) vol.value = m && m.vol != null ? m.vol : 70;
+      tr.querySelector('.bvt').textContent = vol.value + '%';
+    });
+  }
+  BGM_DEF.forEach(function (d) {
+    ROOT.child('bgm/' + d.k + '/meta').on('value', function (s) { bgmMetas[d.k] = s.val(); renderBgm(); });
+  });
+  renderBgm();
+  $('bgmBody').addEventListener('click', function (e) {
+    const tr = e.target.closest('tr'); if (!tr) return;
+    const k = tr.dataset.k, d = BGM_DEF.find(function (x) { return x.k === k; });
+    if (e.target.classList.contains('bup')) { bgmTarget = k; $('bgmFile').value = ''; $('bgmFile').click(); }
+    if (e.target.classList.contains('bdel') && confirm('「' + d.label + '」のBGMを削除しますか？')) {
+      ROOT.child('bgm/' + k).remove().then(function () { toast('削除しました'); }, fail);
+    }
+  });
+  $('bgmBody').addEventListener('change', function (e) {
+    const tr = e.target.closest('tr'); if (!tr) return;
+    const k = tr.dataset.k;
+    if (e.target.classList.contains('bon')) ROOT.child('bgm/' + k + '/meta/on').set(e.target.checked).catch(fail);
+    if (e.target.classList.contains('bloop')) ROOT.child('bgm/' + k + '/meta/loop').set(e.target.checked).catch(fail);
+    if (e.target.classList.contains('bvol')) ROOT.child('bgm/' + k + '/meta/vol').set(Number(e.target.value)).catch(fail);
+  });
+  $('bgmBody').addEventListener('input', function (e) {
+    if (e.target.classList.contains('bvol')) e.target.closest('tr').querySelector('.bvt').textContent = e.target.value + '%';
+  });
   $('bgmFile').onchange = function () {
-    const f = $('bgmFile').files[0];
-    if (!f) return;
+    const f = $('bgmFile').files[0], k = bgmTarget;
+    if (!f || !k) return;
+    const d = BGM_DEF.find(function (x) { return x.k === k; });
     if (f.size > 15 * 1024 * 1024) { toast('ファイルが大きすぎます（15MBまで）'); return; }
+    const old = bgmMetas[k];
     const reader = new FileReader();
     reader.onload = async function () {
       try {
         const b64 = String(reader.result).split(',')[1] || '';
         const chunks = [];
         for (let i = 0; i < b64.length; i += BGM_CHUNK) chunks.push(b64.slice(i, i + BGM_CHUNK));
-        $('btnBgmUpload').disabled = true;
-        await ROOT.child('bgm/idle/data').remove();
+        document.querySelectorAll('#bgmBody .bup').forEach(function (b) { b.disabled = true; });
+        await ROOT.child('bgm/' + k + '/data').remove();
         for (let i = 0; i < chunks.length; i++) {
-          $('bgmProg').textContent = 'アップロード中… ' + Math.round(i / chunks.length * 100) + '%';
-          await ROOT.child('bgm/idle/data/' + i).set(chunks[i]);
+          $('bgmProg').textContent = '「' + d.label + '」アップロード中… ' + Math.round(i / chunks.length * 100) + '%';
+          await ROOT.child('bgm/' + k + '/data/' + i).set(chunks[i]);
         }
-        await ROOT.child('bgm/idle/meta').set({
-          name: f.name, type: f.type || 'audio/mpeg', size: f.size, chunks: chunks.length,
-          version: Date.now(), on: true, vol: Number($('bgmVol').value) || 70
+        await ROOT.child('bgm/' + k + '/meta').set({
+          name: f.name, type: f.type || 'audio/mpeg', size: f.size, chunks: chunks.length, version: Date.now(),
+          on: true, loop: old ? old.loop !== false : d.loop, vol: old && old.vol != null ? old.vol : 70
         });
-        $('bgmProg').textContent = 'アップロード完了';
+        $('bgmProg').textContent = '「' + d.label + '」のアップロードが完了しました';
         toast('BGMを設定しました');
       } catch (e) { $('bgmProg').textContent = ''; fail(e); }
-      $('btnBgmUpload').disabled = false;
+      document.querySelectorAll('#bgmBody .bup').forEach(function (b) { b.disabled = false; });
     };
     reader.readAsDataURL(f);
   };
-  $('btnBgmDel').onclick = function () {
-    if (!confirm('QR表示画面のBGMを削除しますか？')) return;
-    ROOT.child('bgm').remove().then(function () { $('bgmProg').textContent = ''; toast('BGMを削除しました'); }, fail);
-  };
-  $('bgmOn').onchange = function () { ROOT.child('bgm/idle/meta/on').set($('bgmOn').checked).catch(fail); };
-  $('bgmVol').oninput = function () { $('bgmVolTxt').textContent = ' ' + $('bgmVol').value + '%'; };
-  $('bgmVol').onchange = function () { ROOT.child('bgm/idle/meta/vol').set(Number($('bgmVol').value)).catch(fail); };
 
   /* ---- CSV ---- */
   $('btnCsv').onclick = function () {
