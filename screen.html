@@ -170,7 +170,6 @@
     <div id="hero">
       <div id="roundNo"></div>
       <div id="badge"></div>
-      <div id="timer">0.00<small>秒</small></div>
     </div>
     <div id="tiles"></div>
     <div id="reveal" hidden><span>正解</span><b id="revealText"></b></div>
@@ -506,7 +505,7 @@ function baseUrl() {
   window.addEventListener('resize', fitNames);
 
   function tick() {
-    if (state.status !== 'idle' && state.startAt) {
+    if (false) {
       const ms = state.status === 'open' ? serverNow() - state.startAt : (state.endAt || serverNow()) - state.startAt;
       $('timer').innerHTML = sec(ms) + '<small>秒</small>';
     }

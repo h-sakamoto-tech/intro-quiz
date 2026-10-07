@@ -56,7 +56,7 @@
 
     <section id="viewEntry" hidden>
       <h2 id="entryTitle">チーム名を入力してください</h2>
-      <p id="entryNote">スクリーンにこの名前で表示されます</p>
+      <p id="entryNote">スクリーンにこの名前で表示されます<br><b>登録後は変更できません</b>のでご注意ください</p>
       <input id="nameIn" type="text" maxlength="20" placeholder="例）総務部チーム" autocomplete="off">
       <button id="joinBtn">登録する</button>
       <p id="entryMsg"></p>
@@ -67,7 +67,6 @@
       <div id="roundLabel"></div>
       <button id="buzz" disabled>待機中</button>
       <div id="msg"></div>
-      <button id="editName" class="link">チーム名を変更する</button>
     </section>
   </main>
 
@@ -254,6 +253,7 @@ function baseUrl() {
     if (!name) { $('entryMsg').textContent = 'チーム名を入力してください'; return; }
     const dup = teams.some(function (t) { return t.joined && t.id !== myTeam && t.name === name; });
     if (dup) { $('entryMsg').textContent = '同じ名前のチームがすでにあります。別の名前にしてください。'; return; }
+    if (!myTeam && !confirm('「' + name + '」で登録します。登録後は変更できません。よろしいですか？')) return;
     $('joinBtn').disabled = true; $('entryMsg').textContent = '';
     try {
       if (myTeam) {
@@ -278,7 +278,6 @@ function baseUrl() {
   }
   $('joinBtn').addEventListener('click', submitName);
   $('nameIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submitName(); } });
-  $('editName').addEventListener('click', function () { editing = true; $('nameIn').value = myName(); $('entryMsg').textContent = ''; render(); });
   $('cancelEdit').addEventListener('click', function () { editing = false; render(); });
 
   /* わかった！ */
