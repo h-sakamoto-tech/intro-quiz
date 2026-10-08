@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>イントロドン！ - 管理画面</title>
+<title>生演奏でイントロドン！ - 管理画面</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <style>
@@ -58,7 +58,7 @@
 </head>
 <body>
   <header>
-    <h1>イントロドン！ 管理画面</h1>
+    <h1>生演奏でイントロドン！ 管理画面</h1>
     <span class="sp"></span>
     <span id="conn" hidden>再接続中…</span>
     <span id="joinedHead"></span>
@@ -80,8 +80,8 @@
         <button class="big stop" id="btnStop">■ ストップ</button>
       </div>
       <div class="subRow">
-        <button id="btnIdle">待機画面（QR・参加状況）へ</button>
-        <button id="btnReady" class="ready">ルール説明（まもなく開始）を表示</button>
+        <button id="btnReady" class="ready">① ルール説明を表示</button>
+        <button id="btnIdle">② QR画面（参加受付）を表示</button>
         <button id="btnCancel" class="danger">この問題をやり直し</button>
         <button id="btnFinish" class="finish">クイズ終了</button>
         <button id="btnPrev">◀ 前の問題に戻る</button>
@@ -160,7 +160,7 @@
 
 <script>
 /* =========================================================
- * イントロドン！ 共通設定（Firebase Realtime Database）
+ * 生演奏でイントロドン！ 共通設定（Firebase Realtime Database）
  *
  * Firebase プロジェクト: intro-quiz-bf88f（設定済み）
  * Firebase コンソール →（歯車）プロジェクトの設定 → マイアプリ →
@@ -179,7 +179,7 @@ const FIREBASE_CONFIG = {
 /* ▲▲▲ ここまで ▲▲▲ */
 
 const TEAM_COUNT = 20;
-const DEFAULT_TITLE = 'イントロドン！';
+const DEFAULT_TITLE = '生演奏でイントロドン！';
 
 if (!/^https:\/\//.test(FIREBASE_CONFIG.databaseURL || '')) {
   document.addEventListener('DOMContentLoaded', function () {
@@ -211,7 +211,7 @@ function esc(s) {
 function sec(ms) { return (Math.max(0, ms) / 1000).toFixed(2); }
 
 function defaultState() {
-  return { title: DEFAULT_TITLE, roundNo: 0, status: 'idle', startAt: 0, endAt: 0, showQr: true, reveal: '' };
+  return { title: DEFAULT_TITLE, roundNo: 0, status: 'ready', startAt: 0, endAt: 0, showQr: true, reveal: '' };
 }
 
 /** teams オブジェクト → [{id, name, device, joined}] (1..TEAM_COUNT) */
@@ -314,7 +314,7 @@ function baseUrl() {
     $('joinedHead').textContent = '参加 ' + joined + ' / ' + teams.length;
     $('stRound').textContent = s.roundNo ? '第' + s.roundNo + '問' : '開始前';
     $('stBadge').className = s.status;
-    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了', finished: 'クイズ終了', ready: 'ルール説明中' }[s.status] || s.status;
+    $('stBadge').textContent = { idle: '待機', open: '受付中', closed: '受付終了', finished: 'クイズ終了', ready: 'ルール説明' }[s.status] || s.status;
     $('btnStart').disabled = s.status === 'open';
     $('btnStop').disabled = s.status !== 'open';
     $('btnStart').textContent = '▶ 第' + (s.status === 'open' ? s.roundNo : s.roundNo + 1) + '問 スタート（演奏開始）';
@@ -506,8 +506,8 @@ function baseUrl() {
 
   /* ---- BGM（画面ごと） ---- */
   const BGM_DEF = [
-    { k: 'idle',   label: 'QR表示画面（待機・参加受付）', loop: true },
-    { k: 'ready',  label: 'イントロドン！説明画面', loop: true },
+    { k: 'ready',  label: '① ルール説明画面', loop: true },
+    { k: 'idle',   label: '② QR表示画面（参加受付）', loop: true },
     { k: 'round',  label: '第〇問（スタート〜受付中）', loop: false },
     { k: 'closed', label: '受付終了（回答タイム）', loop: true },
     { k: 'finish', label: 'クイズ終了画面', loop: true }
