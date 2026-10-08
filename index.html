@@ -3,13 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>イントロドン！ - 回答</title>
+<title>生演奏でイントロドン！ - 回答</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@900&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: #10131c; color: #fff;
-    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+    font-family: "FOT-Matisse Pro EB", "FOT-マティス Pro EB", "Matisse EB", "マティス EB", "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif; font-weight: 900; }
+  input, button { font-family: inherit; }
   body { display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; }
   header { padding: 12px 16px; background: #1b2030; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   #title { font-weight: 700; font-size: 15px; opacity: .8; }
@@ -47,7 +50,7 @@
 </head>
 <body>
   <header>
-    <span id="title">イントロドン！</span>
+    <span id="title">生演奏でイントロドン！</span>
     <span id="conn" hidden>再接続中…</span>
     <span id="teamLabel"></span>
   </header>
@@ -72,7 +75,7 @@
 
 <script>
 /* =========================================================
- * イントロドン！ 共通設定（Firebase Realtime Database）
+ * 生演奏でイントロドン！ 共通設定（Firebase Realtime Database）
  *
  * Firebase プロジェクト: intro-quiz-bf88f（設定済み）
  * Firebase コンソール →（歯車）プロジェクトの設定 → マイアプリ →
@@ -91,7 +94,7 @@ const FIREBASE_CONFIG = {
 /* ▲▲▲ ここまで ▲▲▲ */
 
 const TEAM_COUNT = 20;
-const DEFAULT_TITLE = 'イントロドン！';
+const DEFAULT_TITLE = '生演奏でイントロドン！';
 
 if (!/^https:\/\//.test(FIREBASE_CONFIG.databaseURL || '')) {
   document.addEventListener('DOMContentLoaded', function () {
@@ -123,7 +126,7 @@ function esc(s) {
 function sec(ms) { return (Math.max(0, ms) / 1000).toFixed(2); }
 
 function defaultState() {
-  return { title: DEFAULT_TITLE, roundNo: 0, status: 'idle', startAt: 0, endAt: 0, showQr: true, reveal: '' };
+  return { title: DEFAULT_TITLE, roundNo: 0, status: 'ready', startAt: 0, endAt: 0, showQr: true, reveal: '' };
 }
 
 /** teams オブジェクト → [{id, name, device, joined}] (1..TEAM_COUNT) */
@@ -237,7 +240,7 @@ function baseUrl() {
       else { btn.textContent = '終了'; msg = '受付終了<br><small>次の問題をお待ちください</small>'; }
       if (state.reveal) msg += '<br><small>正解：' + esc(state.reveal) + '</small>';
     } else if (state.status === 'ready') {
-      btn.textContent = 'まもなく'; msg = 'まもなくイントロドン！が始まります！<br><small>演奏が始まるとボタンが赤くなります。<br>イントロでわかったら「わかった！」を押してください</small>';
+      btn.textContent = 'まもなく'; msg = 'まもなく生演奏でイントロドン！が始まります！<br><small>演奏が始まるとボタンが赤くなります。<br>イントロでわかったら「わかった！」を押してください</small>';
     } else if (state.status === 'finished') {
       btn.textContent = '終了'; msg = 'クイズは終了しました<br><small>ご参加ありがとうございました！</small>';
     } else {
