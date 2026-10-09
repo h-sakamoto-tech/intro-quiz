@@ -45,6 +45,8 @@
   .danger { color: #c4122a; border-color: #e7a4ad; }
   .openScreen { background: #ffd84d; color: #1d2333; border: none; font-weight: 800; padding: 8px 16px; }
   .ready { background: #d6142a; color: #fff; font-weight: 800; border-color: #d6142a; }
+  .mvplay { background: #7b2cff; color: #fff; font-weight: 800; border-color: #7b2cff; }
+  .mvrow td { vertical-align: middle; }
   .finish { background: #1d2333; color: #ffd84d; font-weight: 800; border-color: #1d2333; }
   .song { margin-top: 12px; padding: 12px; background: #fff7e0; border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
   #songName { font-size: 18px; font-weight: 800; }
@@ -94,7 +96,10 @@
         <div class="subRow">
           <button id="btnReveal">正解をスクリーンに表示</button>
           <button id="btnHide">正解を隠す</button>
+          <button id="btnMvPlay" class="mvplay">▶ 正解発表（MV再生）</button>
+          <button id="btnMvStop">■ MV停止</button>
         </div>
+        <div class="muted" id="mvLabel"></div>
       </div>
     </div>
 
@@ -139,6 +144,17 @@
         <button id="btnReset" class="danger">全リセット（参加チームも消去）</button>
       </div>
       <p class="muted">本番前に「全リセット」でダミー参加と履歴を消してください。</p>
+    </div>
+
+    <div class="card full">
+      <h2>正解発表の動画（MV）</h2>
+      <p class="muted" style="margin-top:-6px">上から順に 第1問・第2問… の正解発表で流れます。▲▼で順番を入れ替えられます。<br>
+        動画はこのPCのブラウザ内に保存されます（インターネットには上げません）。<b>スクリーンはこのPCの「スクリーンを表示」から開いてください。</b>別のPCでは再生できません。</p>
+      <input type="file" id="mvFile" accept="video/*,.mp4,.mov,.webm,.m4v" multiple hidden>
+      <input type="file" id="mvReplace" accept="video/*,.mp4,.mov,.webm,.m4v" hidden>
+      <div class="subRow"><button id="btnMvAdd">動画を追加（複数選択できます）</button><span id="mvProg" class="muted"></span></div>
+      <table style="margin-top:8px"><thead><tr><th>問題</th><th>動画ファイル</th><th>曲リストの曲名</th><th>順番</th><th></th></tr></thead>
+        <tbody id="mvBody"><tr><td colspan="5" class="muted">まだ動画がありません</td></tr></tbody></table>
     </div>
 
     <div class="card full">
@@ -247,6 +263,41 @@ function baseUrl() {
   return location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
 }
 
+/* ===== 正解発表の動画（MV）=====
+ * 動画は大きいのでFirebaseには上げず、このPCのブラウザ内（IndexedDB）に保存します。
+ * 管理画面とスクリーンを「同じPC・同じブラウザ」で開くと共有されます。 */
+const MVDB = (function () {
+  let dbp = null;
+  function open() {
+    if (dbp) return dbp;
+    dbp = new Promise(function (res, rej) {
+      const r = indexedDB.open('introdon-mv', 1);
+      r.onupgradeneeded = function () { const d = r.result; d.createObjectStore('videos', { keyPath: 'id' }); d.createObjectStore('meta'); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+    return dbp;
+  }
+  function req(store, mode, fn) {
+    return open().then(function (db) {
+      return new Promise(function (res, rej) {
+        const t = db.transaction(store, mode), q = fn(t.objectStore(store));
+        t.oncomplete = function () { res(q ? q.result : undefined); };
+        t.onerror = function () { rej(t.error); }; t.onabort = function () { rej(t.error); };
+      });
+    });
+  }
+  return {
+    put: function (v) { return req('videos', 'readwrite', function (s) { return s.put(v); }); },
+    get: function (id) { return req('videos', 'readonly', function (s) { return s.get(id); }); },
+    del: function (id) { return req('videos', 'readwrite', function (s) { return s.delete(id); }); },
+    getOrder: function () { return req('meta', 'readonly', function (s) { return s.get('order'); }).then(function (o) { return o || []; }); },
+    setOrder: function (o) { return req('meta', 'readwrite', function (s) { return s.put(o, 'order'); }); }
+  };
+})();
+let mvChan = null;
+try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
+
 </script>
 <script>
   /* ▼ 管理者パスワード（必要に応じて変更してください） */
@@ -351,6 +402,7 @@ function baseUrl() {
     $('songLabel').textContent = '第' + songNo + '問の曲（司会用）' + (beforeNext ? ' ※次の問題' : '');
     $('songName').textContent = song || '（曲リスト未入力）';
     $('btnReveal').disabled = s.status !== 'closed' || !song || !!s.reveal;
+    renderMvControls();
     $('btnHide').disabled = !s.reveal;
 
     if (document.activeElement !== $('titleIn')) $('titleIn').value = s.title;
@@ -381,7 +433,7 @@ function baseUrl() {
 
   function startRound() {
     if (state.status === 'open') return;
-    ROOT.child('state').update({ roundNo: (state.roundNo || 0) + 1, status: 'open', startAt: TS, endAt: 0, reveal: '' }).catch(fail);
+    ROOT.child('state').update({ roundNo: (state.roundNo || 0) + 1, status: 'open', startAt: TS, endAt: 0, reveal: '', mv: null }).catch(fail);
   }
 
   async function closeRound() {
@@ -589,6 +641,78 @@ function baseUrl() {
     };
     reader.readAsDataURL(f);
   };
+
+  /* ---- 正解発表の動画（MV） ---- */
+  let mvList = [];   // [{id, name, size}]（順番どおり）
+  async function loadMv() {
+    try {
+      const order = await MVDB.getOrder();
+      const list = [];
+      for (const id of order) { const v = await MVDB.get(id); if (v) list.push({ id: v.id, name: v.name, size: v.size }); }
+      mvList = list;
+    } catch (e) { mvList = []; $('mvProg').textContent = 'このブラウザでは動画を保存できません'; }
+    renderMv(); renderMvControls();
+  }
+  function notifyMv() { try { mvChan && mvChan.postMessage({ type: 'changed' }); } catch (e) {} }
+  async function saveOrder() { await MVDB.setOrder(mvList.map(function (v) { return v.id; })); notifyMv(); renderMv(); renderMvControls(); }
+  function renderMv() {
+    const songs = $('songs').value.split('\n');
+    $('mvBody').innerHTML = mvList.length ? mvList.map(function (v, i) {
+      return '<tr class="mvrow" data-i="' + i + '"><td><b>第' + (i + 1) + '問</b></td><td>' + esc(v.name) + ' <span class="muted">（' + (v.size / 1024 / 1024).toFixed(1) + 'MB）</span></td>' +
+        '<td class="muted">' + esc((songs[i] || '').trim() || '—') + '</td>' +
+        '<td style="white-space:nowrap"><button class="mvUp"' + (i === 0 ? ' disabled' : '') + '>▲</button> <button class="mvDown"' + (i === mvList.length - 1 ? ' disabled' : '') + '>▼</button></td>' +
+        '<td style="white-space:nowrap"><button class="mvTest">試し再生</button> <button class="mvRep">差し替え</button> <button class="mvDel danger">削除</button></td></tr>';
+    }).join('') : '<tr><td colspan="5" class="muted">まだ動画がありません</td></tr>';
+  }
+  function renderMvControls() {
+    const s = state, q = s.roundNo, v = mvList[q - 1], playing = !!(s.mv && s.mv.playing);
+    $('btnMvPlay').disabled = playing || s.status === 'open' || q < 1 || !v;
+    $('btnMvStop').disabled = !playing;
+    $('mvLabel').textContent = q < 1 ? '' : (playing ? '再生中：第' + s.mv.q + '問のMV' : ('第' + q + '問のMV：' + (v ? v.name : '（未登録）')));
+  }
+  async function addVideos(files, replaceIndex) {
+    for (let k = 0; k < files.length; k++) {
+      const f = files[k];
+      $('mvProg').textContent = '保存中… ' + f.name;
+      const id = 'mv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      try { await MVDB.put({ id: id, name: f.name, type: f.type || 'video/mp4', size: f.size, blob: f }); }
+      catch (e) { toast('保存できませんでした：' + f.name); continue; }
+      if (replaceIndex != null) { const old = mvList[replaceIndex]; mvList[replaceIndex] = { id: id, name: f.name, size: f.size }; if (old) MVDB.del(old.id); }
+      else mvList.push({ id: id, name: f.name, size: f.size });
+    }
+    $('mvProg').textContent = '';
+    await saveOrder();
+    toast('動画を保存しました');
+  }
+  $('btnMvAdd').onclick = function () { $('mvFile').value = ''; $('mvFile').click(); };
+  $('mvFile').onchange = function () { addVideos(Array.from($('mvFile').files)); };
+  let mvRepIndex = null;
+  $('mvReplace').onchange = function () { if ($('mvReplace').files[0]) addVideos([$('mvReplace').files[0]], mvRepIndex); };
+  $('mvBody').addEventListener('click', async function (e) {
+    const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+    const i = Number(tr.dataset.i);
+    if (e.target.classList.contains('mvUp') && i > 0) { const t = mvList[i - 1]; mvList[i - 1] = mvList[i]; mvList[i] = t; await saveOrder(); }
+    if (e.target.classList.contains('mvDown') && i < mvList.length - 1) { const t = mvList[i + 1]; mvList[i + 1] = mvList[i]; mvList[i] = t; await saveOrder(); }
+    if (e.target.classList.contains('mvRep')) { mvRepIndex = i; $('mvReplace').value = ''; $('mvReplace').click(); }
+    if (e.target.classList.contains('mvDel') && confirm('第' + (i + 1) + '問の動画「' + mvList[i].name + '」を削除しますか？（後ろの動画は1つずつ繰り上がります）')) {
+      const old = mvList.splice(i, 1)[0]; await MVDB.del(old.id); await saveOrder();
+    }
+    if (e.target.classList.contains('mvTest')) {
+      const v = await MVDB.get(mvList[i].id);
+      if (v) { const w = window.open(URL.createObjectURL(v.blob), '_blank'); if (!w) toast('ポップアップがブロックされました'); }
+    }
+  });
+  $('songs').addEventListener('input', renderMv);
+  $('btnMvPlay').onclick = function () {
+    const q = state.roundNo;
+    if (!mvList[q - 1]) { toast('第' + q + '問の動画が登録されていません'); return; }
+    const title = songOf(q);
+    const u = { mv: { q: q, playing: true, ts: TS, title: title } };
+    if (title) u.reveal = title;
+    ROOT.child('state').update(u).catch(fail);
+  };
+  $('btnMvStop').onclick = function () { ROOT.child('state/mv/playing').set(false).catch(fail); };
+  loadMv();
 
   /* ---- CSV ---- */
   $('btnCsv').onclick = function () {

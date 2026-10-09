@@ -162,6 +162,41 @@ function baseUrl() {
   return location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
 }
 
+/* ===== 正解発表の動画（MV）=====
+ * 動画は大きいのでFirebaseには上げず、このPCのブラウザ内（IndexedDB）に保存します。
+ * 管理画面とスクリーンを「同じPC・同じブラウザ」で開くと共有されます。 */
+const MVDB = (function () {
+  let dbp = null;
+  function open() {
+    if (dbp) return dbp;
+    dbp = new Promise(function (res, rej) {
+      const r = indexedDB.open('introdon-mv', 1);
+      r.onupgradeneeded = function () { const d = r.result; d.createObjectStore('videos', { keyPath: 'id' }); d.createObjectStore('meta'); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+    return dbp;
+  }
+  function req(store, mode, fn) {
+    return open().then(function (db) {
+      return new Promise(function (res, rej) {
+        const t = db.transaction(store, mode), q = fn(t.objectStore(store));
+        t.oncomplete = function () { res(q ? q.result : undefined); };
+        t.onerror = function () { rej(t.error); }; t.onabort = function () { rej(t.error); };
+      });
+    });
+  }
+  return {
+    put: function (v) { return req('videos', 'readwrite', function (s) { return s.put(v); }); },
+    get: function (id) { return req('videos', 'readonly', function (s) { return s.get(id); }); },
+    del: function (id) { return req('videos', 'readwrite', function (s) { return s.delete(id); }); },
+    getOrder: function () { return req('meta', 'readonly', function (s) { return s.get('order'); }).then(function (o) { return o || []; }); },
+    setOrder: function (o) { return req('meta', 'readwrite', function (s) { return s.put(o, 'order'); }); }
+  };
+})();
+let mvChan = null;
+try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
+
 </script>
 <script>
   const $ = function (id) { return document.getElementById(id); };

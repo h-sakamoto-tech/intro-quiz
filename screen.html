@@ -151,6 +151,19 @@
   .confetti { position: absolute; top: -5vh; width: 1.4vh; height: 2.4vh; border-radius: .3vh; animation: fall linear infinite; opacity: .9; }
   @keyframes fall { to { transform: translateY(115vh) rotate(720deg); } }
 
+  /* ===== 正解発表（MV） ===== */
+  #mvBox { position: fixed; inset: 0; z-index: 9; background: #000; display: flex; align-items: center; justify-content: center; }
+  #mvVideo { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  #mvIntro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vh;
+    background: radial-gradient(ellipse at center, #2b1260 0%, #05060f 70%); z-index: 2; }
+  #mvIntro .mi1 { font-size: 9vh; font-weight: 900; letter-spacing: .3em; color: #fff; text-shadow: 0 0 3vh #ff2d55; animation: zoomIn .6s cubic-bezier(.2,1.8,.4,1) both; }
+  #mvIntro .mi2 { font-size: 12vh; font-weight: 900; text-align: center; padding: 0 4vw; line-height: 1.2;
+    background: linear-gradient(180deg, #fff6b0, #ffcc33 45%, #ff6a00); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 4vh rgba(255,160,0,.8)); animation: zoomIn .7s cubic-bezier(.2,1.8,.4,1) .5s both; }
+  #mvCap { position: absolute; left: 3vw; bottom: 4vh; z-index: 1; padding: 1.4vh 2.4vw; border-radius: 1.4vh; background: rgba(0,0,0,.55);
+    font-size: 4vh; font-weight: 900; transition: opacity 1s; }
+  #mvCap span { color: #ffcc33; margin-right: 1.5vw; }
+  #mvMsg { position: absolute; z-index: 3; font-size: 4vh; font-weight: 900; text-align: center; padding: 0 6vw; line-height: 1.6; }
   #starter { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 2vh; font-size: 4vh; cursor: pointer; z-index: 10; }
   #starter small { font-size: 2.4vh; opacity: .7; }
@@ -202,6 +215,12 @@
     <div class="fn" id="finishNote"></div>
   </section>
 
+  <div id="mvBox" hidden>
+    <video id="mvVideo" playsinline preload="auto"></video>
+    <div id="mvIntro" hidden><div class="mi1">正解は…</div><div class="mi2" id="mvIntroTitle"></div></div>
+    <div id="mvCap" hidden><span id="mvCapQ"></span><b id="mvCapTitle"></b></div>
+    <div id="mvMsg" hidden></div>
+  </div>
   <div id="burst" hidden><div class="bq" id="burstQ"></div><div class="bs">START!</div></div>
   <div id="starter">クリックして開始（BGM ON）<small>ブラウザを全画面表示（F11）にしてください</small></div>
   <div id="conn" hidden>再接続中…</div>
@@ -295,6 +314,41 @@ function baseUrl() {
   return location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
 }
 
+/* ===== 正解発表の動画（MV）=====
+ * 動画は大きいのでFirebaseには上げず、このPCのブラウザ内（IndexedDB）に保存します。
+ * 管理画面とスクリーンを「同じPC・同じブラウザ」で開くと共有されます。 */
+const MVDB = (function () {
+  let dbp = null;
+  function open() {
+    if (dbp) return dbp;
+    dbp = new Promise(function (res, rej) {
+      const r = indexedDB.open('introdon-mv', 1);
+      r.onupgradeneeded = function () { const d = r.result; d.createObjectStore('videos', { keyPath: 'id' }); d.createObjectStore('meta'); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+    return dbp;
+  }
+  function req(store, mode, fn) {
+    return open().then(function (db) {
+      return new Promise(function (res, rej) {
+        const t = db.transaction(store, mode), q = fn(t.objectStore(store));
+        t.oncomplete = function () { res(q ? q.result : undefined); };
+        t.onerror = function () { rej(t.error); }; t.onabort = function () { rej(t.error); };
+      });
+    });
+  }
+  return {
+    put: function (v) { return req('videos', 'readwrite', function (s) { return s.put(v); }); },
+    get: function (id) { return req('videos', 'readonly', function (s) { return s.get(id); }); },
+    del: function (id) { return req('videos', 'readwrite', function (s) { return s.delete(id); }); },
+    getOrder: function () { return req('meta', 'readonly', function (s) { return s.get('order'); }).then(function (o) { return o || []; }); },
+    setOrder: function (o) { return req('meta', 'readwrite', function (s) { return s.put(o, 'order'); }); }
+  };
+})();
+let mvChan = null;
+try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
+
 </script>
 <script>
   const $ = function (id) { return document.getElementById(id); };
@@ -375,6 +429,7 @@ function baseUrl() {
   }
   function updateBgm() {
     if (!audioUnlocked) return;
+    if (mvActive) { BGM_SLOTS.forEach(function (x) { stopSlot(x, true); }); return; }
     const k = currentSlot();
     // 第〇問・受付終了は問題ごとに最初から（startAtで区別）
     const key = k ? k + (k === 'round' || k === 'closed' ? ':' + state.startAt : '') : '';
@@ -394,6 +449,53 @@ function baseUrl() {
       a.play().catch(function () {});
     }
   }
+
+  /* ---- 正解発表（MV） ---- */
+  let mvActive = false, mvKey = null, mvUrl = null, mvTimers = [];
+  const mvVideo = $('mvVideo');
+  function mvClear() { mvTimers.forEach(clearTimeout); mvTimers = []; }
+  function mvHide() {
+    mvClear(); mvVideo.pause(); mvVideo.removeAttribute('src'); mvVideo.load();
+    if (mvUrl) { URL.revokeObjectURL(mvUrl); mvUrl = null; }
+    $('mvBox').hidden = true; mvActive = false; mvKey = null; updateBgm();
+  }
+  function mvDone() { ROOT.child('state/mv/playing').set(false).catch(function () {}); mvHide(); }
+  async function updateMv() {
+    const m = state.mv;
+    const want = !!(m && m.playing);
+    if (!want) { if (mvActive) mvHide(); return; }
+    const key = m.q + ':' + m.ts;
+    if (mvKey === key) return;
+    mvClear(); mvKey = key; mvActive = true;
+    BGM_SLOTS.forEach(function (x) { stopSlot(x, true); });
+    $('mvBox').hidden = false; $('mvMsg').hidden = true; $('mvCap').hidden = true;
+    $('mvIntro').hidden = false; $('mvIntroTitle').textContent = m.title || ('第' + m.q + '問');
+    let rec = null;
+    try { const order = await MVDB.getOrder(); const id = order[m.q - 1]; rec = id ? await MVDB.get(id) : null; } catch (e) { rec = null; }
+    if (mvKey !== key) return;
+    if (!rec) {
+      $('mvIntro').hidden = true; $('mvMsg').hidden = false;
+      $('mvMsg').innerHTML = '第' + m.q + '問の動画がこのPCに登録されていません<br><small>このPCの管理画面で動画を追加してください</small>';
+      mvTimers.push(setTimeout(mvDone, 5000));
+      return;
+    }
+    if (mvUrl) URL.revokeObjectURL(mvUrl);
+    mvUrl = URL.createObjectURL(rec.blob);
+    mvVideo.src = mvUrl; mvVideo.currentTime = 0;
+    mvTimers.push(setTimeout(function () {
+      if (mvKey !== key) return;
+      $('mvIntro').hidden = true;
+      $('mvCapQ').textContent = '第' + m.q + '問 正解'; $('mvCapTitle').textContent = m.title || '';
+      $('mvCap').hidden = !m.title; $('mvCap').style.opacity = 1;
+      mvTimers.push(setTimeout(function () { $('mvCap').style.opacity = 0; }, 7000));
+      mvVideo.play().catch(function (e) {
+        console.warn('MV play', e);
+        $('mvMsg').hidden = false; $('mvMsg').innerHTML = '動画を再生できませんでした<br><small>スクリーン画面を一度クリックしてから、もう一度再生してください</small>';
+        mvTimers.push(setTimeout(mvDone, 5000));
+      });
+    }, 2600));
+  }
+  mvVideo.addEventListener('ended', function () { if (mvActive) mvDone(); });
 
   /* ---- スタート演出 ---- */
   function showBurst(n) {
@@ -426,6 +528,7 @@ function baseUrl() {
   /* ---- 描画 ---- */
   function render() {
     const s = state;
+    updateMv();
     updateBgm();
     $('title').textContent = s.title;
     document.title = s.title + ' - スクリーン';
