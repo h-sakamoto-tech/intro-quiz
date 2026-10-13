@@ -149,12 +149,14 @@
     <div class="card full">
       <h2>正解発表の動画（MV）</h2>
       <p class="muted" style="margin-top:-6px">上から順に 第1問・第2問… の正解発表で流れます。▲▼で順番を入れ替えられます。<br>
-        動画はこのPCのブラウザ内に保存されます（インターネットには上げません）。<b>スクリーンはこのPCの「スクリーンを表示」から開いてください。</b>別のPCでは再生できません。</p>
+        動画ファイルはインターネットには上げず、各PCのブラウザ内に保存します。<b>スクリーンを映すPCにも動画が必要です。</b>
+        スクリーンを別のPCで映す場合は、そのPCのスクリーン画面（開始前の画面）の「このPCに正解動画を取り込む」で<b>同じファイル</b>を選んでください（ファイル名で自動的に同じ問題に割り当てられます）。
+        「スクリーンのPC」の列が全部 ✓ になれば準備OKです。</p>
       <input type="file" id="mvFile" accept="video/*,.mp4,.mov,.webm,.m4v" multiple hidden>
       <input type="file" id="mvReplace" accept="video/*,.mp4,.mov,.webm,.m4v" hidden>
       <div class="subRow"><button id="btnMvAdd">動画を追加（複数選択できます）</button><span id="mvProg" class="muted"></span></div>
-      <table style="margin-top:8px"><thead><tr><th>問題</th><th>動画ファイル</th><th>曲リストの曲名</th><th>順番</th><th></th></tr></thead>
-        <tbody id="mvBody"><tr><td colspan="5" class="muted">まだ動画がありません</td></tr></tbody></table>
+      <table style="margin-top:8px"><thead><tr><th>問題</th><th>動画ファイル</th><th>曲リストの曲名</th><th>スクリーンのPC</th><th>このPC</th><th>順番</th><th></th></tr></thead>
+        <tbody id="mvBody"><tr><td colspan="7" class="muted">まだ動画がありません</td></tr></tbody></table>
     </div>
 
     <div class="card full">
@@ -297,6 +299,35 @@ const MVDB = (function () {
 })();
 let mvChan = null;
 try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
+
+/* 動画の並び順と名前はFirebase（bgm/mvlist）で全PC共有。動画ファイル本体は各PCのブラウザ内。
+ * 同じファイル名の動画を別のPCで取り込むと、同じ問題番号に自動で割り当てます。 */
+const MV_LIST_REF = ROOT.child('bgm/mvlist');
+/* Firebaseは配列をオブジェクトで返すことがあるので、番号順の配列に直す */
+function mvToList(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.filter(Boolean);
+  return Object.keys(v).sort(function (a, b) { return Number(a) - Number(b); }).map(function (k) { return v[k]; }).filter(Boolean);
+}
+async function mvImportFiles(files, list) {
+  list = (list || []).slice();
+  for (let k = 0; k < files.length; k++) {
+    const f = files[k];
+    let entry = list.find(function (v) { return v.name === f.name; });
+    let id;
+    if (entry) id = entry.id;
+    else { id = 'mv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); entry = { id: id, name: f.name, size: f.size }; list.push(entry); }
+    await MVDB.put({ id: id, name: f.name, type: f.type || 'video/mp4', size: f.size, blob: f });
+    entry.size = f.size;
+  }
+  await MV_LIST_REF.set(list);
+  return list;
+}
+async function mvLocalIds(list) {
+  const have = {};
+  for (const v of (list || [])) { try { if (await MVDB.get(v.id)) have[v.id] = true; } catch (e) {} }
+  return have;
+}
 
 </script>
 <script>
@@ -642,47 +673,71 @@ try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
     reader.readAsDataURL(f);
   };
 
-  /* ---- 正解発表の動画（MV） ---- */
-  let mvList = [];   // [{id, name, size}]（順番どおり）
-  async function loadMv() {
-    try {
-      const order = await MVDB.getOrder();
-      const list = [];
-      for (const id of order) { const v = await MVDB.get(id); if (v) list.push({ id: v.id, name: v.name, size: v.size }); }
-      mvList = list;
-    } catch (e) { mvList = []; $('mvProg').textContent = 'このブラウザでは動画を保存できません'; }
+  /* ---- 正解発表の動画（MV） ----
+   * 並び順はFirebaseで共有。動画ファイルは「スクリーンを映すPC」のブラウザ内にあればOK。 */
+  let mvList = [], mvHereIds = {}, mvScreenIds = {};
+  MV_LIST_REF.on('value', async function (s) {
+    mvList = mvToList(s.val());
+    // 以前の版でこのPCだけに保存した動画があれば、一覧をFirebaseへ移す
+    if (!mvList.length) {
+      try {
+        const order = await MVDB.getOrder();
+        if (order.length) {
+          const list = [];
+          for (const id of order) { const v = await MVDB.get(id); if (v) list.push({ id: v.id, name: v.name, size: v.size }); }
+          if (list.length) { await MV_LIST_REF.set(list); await MVDB.setOrder([]); return; }
+        }
+      } catch (e) {}
+    }
+    mvHereIds = await mvLocalIds(mvList);
     renderMv(); renderMvControls();
-  }
-  function notifyMv() { try { mvChan && mvChan.postMessage({ type: 'changed' }); } catch (e) {} }
-  async function saveOrder() { await MVDB.setOrder(mvList.map(function (v) { return v.id; })); notifyMv(); renderMv(); renderMvControls(); }
+  });
+  ROOT.child('bgm/mvscreen').on('value', function (s) {
+    const v = s.val(); mvScreenIds = {};
+    mvToList(v && v.ids).forEach(function (id) { mvScreenIds[id] = true; });
+    renderMv(); renderMvControls();
+  });
+  async function saveList() { await MV_LIST_REF.set(mvList); }
   function renderMv() {
     const songs = $('songs').value.split('\n');
+    const ok = function (b) { return b ? '<span class="on">✓</span>' : '<span class="off">✗</span>'; };
     $('mvBody').innerHTML = mvList.length ? mvList.map(function (v, i) {
       return '<tr class="mvrow" data-i="' + i + '"><td><b>第' + (i + 1) + '問</b></td><td>' + esc(v.name) + ' <span class="muted">（' + (v.size / 1024 / 1024).toFixed(1) + 'MB）</span></td>' +
         '<td class="muted">' + esc((songs[i] || '').trim() || '—') + '</td>' +
+        '<td style="text-align:center">' + ok(mvScreenIds[v.id]) + '</td><td style="text-align:center">' + ok(mvHereIds[v.id]) + '</td>' +
         '<td style="white-space:nowrap"><button class="mvUp"' + (i === 0 ? ' disabled' : '') + '>▲</button> <button class="mvDown"' + (i === mvList.length - 1 ? ' disabled' : '') + '>▼</button></td>' +
-        '<td style="white-space:nowrap"><button class="mvTest">試し再生</button> <button class="mvRep">差し替え</button> <button class="mvDel danger">削除</button></td></tr>';
-    }).join('') : '<tr><td colspan="5" class="muted">まだ動画がありません</td></tr>';
+        '<td style="white-space:nowrap"><button class="mvTest"' + (mvHereIds[v.id] ? '' : ' disabled') + '>試し再生</button> <button class="mvRep">差し替え</button> <button class="mvDel danger">削除</button></td></tr>';
+    }).join('') : '<tr><td colspan="7" class="muted">まだ動画がありません</td></tr>';
   }
   function renderMvControls() {
     const s = state, q = s.roundNo, v = mvList[q - 1], playing = !!(s.mv && s.mv.playing);
     $('btnMvPlay').disabled = playing || s.status === 'open' || q < 1 || !v;
     $('btnMvStop').disabled = !playing;
-    $('mvLabel').textContent = q < 1 ? '' : (playing ? '再生中：第' + s.mv.q + '問のMV' : ('第' + q + '問のMV：' + (v ? v.name : '（未登録）')));
+    let label = '';
+    if (q >= 1) {
+      if (playing) label = '再生中：第' + s.mv.q + '問のMV';
+      else if (!v) label = '第' + q + '問のMV：（未登録）';
+      else label = '第' + q + '問のMV：' + v.name + (mvScreenIds[v.id] ? '' : '　⚠ スクリーンのPCにこの動画がありません');
+    }
+    $('mvLabel').textContent = label;
   }
   async function addVideos(files, replaceIndex) {
-    for (let k = 0; k < files.length; k++) {
-      const f = files[k];
-      $('mvProg').textContent = '保存中… ' + f.name;
-      const id = 'mv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-      try { await MVDB.put({ id: id, name: f.name, type: f.type || 'video/mp4', size: f.size, blob: f }); }
-      catch (e) { toast('保存できませんでした：' + f.name); continue; }
-      if (replaceIndex != null) { const old = mvList[replaceIndex]; mvList[replaceIndex] = { id: id, name: f.name, size: f.size }; if (old) MVDB.del(old.id); }
-      else mvList.push({ id: id, name: f.name, size: f.size });
-    }
+    $('mvProg').textContent = '保存中…';
+    try {
+      if (replaceIndex != null) {
+        const old = mvList[replaceIndex], f = files[0];
+        const id = 'mv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        await MVDB.put({ id: id, name: f.name, type: f.type || 'video/mp4', size: f.size, blob: f });
+        mvList[replaceIndex] = { id: id, name: f.name, size: f.size };
+        if (old) MVDB.del(old.id).catch(function () {});
+        await saveList();
+      } else {
+        mvList = await mvImportFiles(files, mvList);
+      }
+      mvHereIds = await mvLocalIds(mvList); renderMv(); renderMvControls();
+      toast('動画を保存しました');
+    } catch (e) { fail(e); }
     $('mvProg').textContent = '';
-    await saveOrder();
-    toast('動画を保存しました');
   }
   $('btnMvAdd').onclick = function () { $('mvFile').value = ''; $('mvFile').click(); };
   $('mvFile').onchange = function () { addVideos(Array.from($('mvFile').files)); };
@@ -691,11 +746,11 @@ try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
   $('mvBody').addEventListener('click', async function (e) {
     const tr = e.target.closest('tr[data-i]'); if (!tr) return;
     const i = Number(tr.dataset.i);
-    if (e.target.classList.contains('mvUp') && i > 0) { const t = mvList[i - 1]; mvList[i - 1] = mvList[i]; mvList[i] = t; await saveOrder(); }
-    if (e.target.classList.contains('mvDown') && i < mvList.length - 1) { const t = mvList[i + 1]; mvList[i + 1] = mvList[i]; mvList[i] = t; await saveOrder(); }
+    if (e.target.classList.contains('mvUp') && i > 0) { const t = mvList[i - 1]; mvList[i - 1] = mvList[i]; mvList[i] = t; await saveList(); }
+    if (e.target.classList.contains('mvDown') && i < mvList.length - 1) { const t = mvList[i + 1]; mvList[i + 1] = mvList[i]; mvList[i] = t; await saveList(); }
     if (e.target.classList.contains('mvRep')) { mvRepIndex = i; $('mvReplace').value = ''; $('mvReplace').click(); }
     if (e.target.classList.contains('mvDel') && confirm('第' + (i + 1) + '問の動画「' + mvList[i].name + '」を削除しますか？（後ろの動画は1つずつ繰り上がります）')) {
-      const old = mvList.splice(i, 1)[0]; await MVDB.del(old.id); await saveOrder();
+      const old = mvList.splice(i, 1)[0]; MVDB.del(old.id).catch(function () {}); await saveList();
     }
     if (e.target.classList.contains('mvTest')) {
       const v = await MVDB.get(mvList[i].id);
@@ -704,15 +759,15 @@ try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
   });
   $('songs').addEventListener('input', renderMv);
   $('btnMvPlay').onclick = function () {
-    const q = state.roundNo;
-    if (!mvList[q - 1]) { toast('第' + q + '問の動画が登録されていません'); return; }
+    const q = state.roundNo, v = mvList[q - 1];
+    if (!v) { toast('第' + q + '問の動画が登録されていません'); return; }
+    if (!mvScreenIds[v.id] && !confirm('スクリーンのPCにこの動画が見つかりません。再生を指示しますか？')) return;
     const title = songOf(q);
-    const u = { mv: { q: q, playing: true, ts: TS, title: title } };
+    const u = { mv: { q: q, id: v.id, playing: true, ts: TS, title: title } };
     if (title) u.reveal = title;
     ROOT.child('state').update(u).catch(fail);
   };
   $('btnMvStop').onclick = function () { ROOT.child('state/mv/playing').set(false).catch(fail); };
-  loadMv();
 
   /* ---- CSV ---- */
   $('btnCsv').onclick = function () {

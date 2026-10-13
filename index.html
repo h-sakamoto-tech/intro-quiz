@@ -60,7 +60,7 @@
     <section id="viewEntry" hidden>
       <h2 id="entryTitle">チーム名を入力してください</h2>
       <p id="entryNote">スクリーンにこの名前で表示されます<br><b>登録後は変更できません</b>のでご注意ください</p>
-      <input id="nameIn" type="text" maxlength="20" placeholder="例）総務部チーム" autocomplete="off">
+      <input id="nameIn" type="text" maxlength="20" placeholder="例）Aチーム" autocomplete="off">
       <button id="joinBtn">登録する</button>
       <p id="entryMsg"></p>
       <button id="cancelEdit" hidden>変更をやめる</button>
@@ -196,6 +196,35 @@ const MVDB = (function () {
 })();
 let mvChan = null;
 try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
+
+/* 動画の並び順と名前はFirebase（bgm/mvlist）で全PC共有。動画ファイル本体は各PCのブラウザ内。
+ * 同じファイル名の動画を別のPCで取り込むと、同じ問題番号に自動で割り当てます。 */
+const MV_LIST_REF = ROOT.child('bgm/mvlist');
+/* Firebaseは配列をオブジェクトで返すことがあるので、番号順の配列に直す */
+function mvToList(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.filter(Boolean);
+  return Object.keys(v).sort(function (a, b) { return Number(a) - Number(b); }).map(function (k) { return v[k]; }).filter(Boolean);
+}
+async function mvImportFiles(files, list) {
+  list = (list || []).slice();
+  for (let k = 0; k < files.length; k++) {
+    const f = files[k];
+    let entry = list.find(function (v) { return v.name === f.name; });
+    let id;
+    if (entry) id = entry.id;
+    else { id = 'mv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); entry = { id: id, name: f.name, size: f.size }; list.push(entry); }
+    await MVDB.put({ id: id, name: f.name, type: f.type || 'video/mp4', size: f.size, blob: f });
+    entry.size = f.size;
+  }
+  await MV_LIST_REF.set(list);
+  return list;
+}
+async function mvLocalIds(list) {
+  const have = {};
+  for (const v of (list || [])) { try { if (await MVDB.get(v.id)) have[v.id] = true; } catch (e) {} }
+  return have;
+}
 
 </script>
 <script>

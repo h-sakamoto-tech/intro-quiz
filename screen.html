@@ -166,6 +166,9 @@
   #mvMsg { position: absolute; z-index: 3; font-size: 4vh; font-weight: 900; text-align: center; padding: 0 6vw; line-height: 1.6; }
   #starter { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 2vh; font-size: 4vh; cursor: pointer; z-index: 10; }
+  #mvSetup { margin-top: 4vh; font-size: 2.4vh; padding: 2vh 2.4vw; border-radius: 1.4vh; background: rgba(255,255,255,.08); border: .2vh solid rgba(255,255,255,.2); text-align: center; line-height: 1.8; cursor: default; }
+  #mvSetup button { font: inherit; font-size: 2.2vh; margin-left: 1vw; padding: .6vh 1.4vw; border-radius: 1vh; border: none; background: #7b2cff; color: #fff; cursor: pointer; }
+  #mvImportMsg { font-size: 2vh; opacity: .85; }
   #starter small { font-size: 2.4vh; opacity: .7; }
   #conn { position: fixed; left: 1vw; bottom: 1vh; font-size: 1.8vh; color: #ff7b7b; }
 </style>
@@ -203,7 +206,7 @@
     <ol class="rules">
       <li><span class="rn">1</span><div>QRコードは<em>各チームのリーダーだけ</em>が読み込んで、チーム名を登録してください</div></li>
       <li><span class="rn">2</span><div>イントロを聴いて分かったチームは、スマホに表示される<em>「わかった！」</em>ボタンを押してください</div></li>
-      <li><span class="rn">3</span><div>最初に<em>「わかった！」</em>ボタンを押したチームのところへ、司会がマイクを持っていくので回答してください</div></li>
+      <li><span class="rn">3</span><div>最初に<em>「わかった！」</em>ボタンを押したチームのところへ、司会がマイクを持っていくので<em>曲名</em>を回答してください</div></li>
       <li><span class="rn">4</span><div>外した場合は、次に早押ししたチームに回答権がわたります</div></li>
     </ol>
   </section>
@@ -222,7 +225,12 @@
     <div id="mvMsg" hidden></div>
   </div>
   <div id="burst" hidden><div class="bq" id="burstQ"></div><div class="bs">START!</div></div>
-  <div id="starter">クリックして開始（BGM ON）<small>ブラウザを全画面表示（F11）にしてください</small></div>
+  <div id="starter">クリックして開始（BGM ON）<small>ブラウザを全画面表示（F11）にしてください</small>
+    <div id="mvSetup">正解動画（このPCに保存済み）：<b id="mvHave">確認中…</b>
+      <button id="btnMvImport">このPCに正解動画を取り込む</button>
+      <input type="file" id="mvImport" accept="video/*,.mp4,.mov,.webm,.m4v" multiple hidden>
+      <div id="mvImportMsg"></div></div>
+  </div>
   <div id="conn" hidden>再接続中…</div>
 
 <script>
@@ -349,6 +357,35 @@ const MVDB = (function () {
 let mvChan = null;
 try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
 
+/* 動画の並び順と名前はFirebase（bgm/mvlist）で全PC共有。動画ファイル本体は各PCのブラウザ内。
+ * 同じファイル名の動画を別のPCで取り込むと、同じ問題番号に自動で割り当てます。 */
+const MV_LIST_REF = ROOT.child('bgm/mvlist');
+/* Firebaseは配列をオブジェクトで返すことがあるので、番号順の配列に直す */
+function mvToList(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.filter(Boolean);
+  return Object.keys(v).sort(function (a, b) { return Number(a) - Number(b); }).map(function (k) { return v[k]; }).filter(Boolean);
+}
+async function mvImportFiles(files, list) {
+  list = (list || []).slice();
+  for (let k = 0; k < files.length; k++) {
+    const f = files[k];
+    let entry = list.find(function (v) { return v.name === f.name; });
+    let id;
+    if (entry) id = entry.id;
+    else { id = 'mv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); entry = { id: id, name: f.name, size: f.size }; list.push(entry); }
+    await MVDB.put({ id: id, name: f.name, type: f.type || 'video/mp4', size: f.size, blob: f });
+    entry.size = f.size;
+  }
+  await MV_LIST_REF.set(list);
+  return list;
+}
+async function mvLocalIds(list) {
+  const have = {};
+  for (const v of (list || [])) { try { if (await MVDB.get(v.id)) have[v.id] = true; } catch (e) {} }
+  return have;
+}
+
 </script>
 <script>
   const $ = function (id) { return document.getElementById(id); };
@@ -362,6 +399,18 @@ try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
   } else { $('qr').textContent = APP_URL; }
 
   /* ---- 音はすべて管理画面からアップロードしたBGMのみ（内蔵の効果音なし） ---- */
+  $('mvSetup').addEventListener('click', function (e) { e.stopPropagation(); });
+  $('btnMvImport').addEventListener('click', function () { $('mvImport').value = ''; $('mvImport').click(); });
+  $('mvImport').addEventListener('change', async function () {
+    const files = Array.from($('mvImport').files); if (!files.length) return;
+    $('mvImportMsg').textContent = '取り込み中…';
+    try {
+      const before = mvSharedList.length;
+      mvSharedList = await mvImportFiles(files, mvSharedList);
+      await refreshMvHave();
+      $('mvImportMsg').textContent = files.length + '本を取り込みました' + (mvSharedList.length > before ? '' : '（管理画面の一覧と同じ名前の動画に割り当てました）');
+    } catch (e) { $('mvImportMsg').textContent = '取り込みに失敗しました：' + (e && e.message || e); }
+  });
   $('starter').addEventListener('click', function () {
     try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch (e) {}
     $('starter').hidden = true;
@@ -450,6 +499,15 @@ try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
     }
   }
 
+  /* ---- 正解発表（MV）：一覧はFirebase、動画はこのPC ---- */
+  let mvSharedList = [];
+  async function refreshMvHave() {
+    const have = await mvLocalIds(mvSharedList);
+    const ids = Object.keys(have);
+    $('mvHave').textContent = ids.length + ' / ' + mvSharedList.length + ' 本';
+    ROOT.child('bgm/mvscreen').set({ ids: ids, ts: TS }).catch(function () {});
+  }
+  MV_LIST_REF.on('value', function (s) { mvSharedList = mvToList(s.val()); refreshMvHave(); });
   /* ---- 正解発表（MV） ---- */
   let mvActive = false, mvKey = null, mvUrl = null, mvTimers = [];
   const mvVideo = $('mvVideo');
@@ -471,11 +529,11 @@ try { mvChan = new BroadcastChannel('introdon-mv'); } catch (e) {}
     $('mvBox').hidden = false; $('mvMsg').hidden = true; $('mvCap').hidden = true;
     $('mvIntro').hidden = false; $('mvIntroTitle').textContent = m.title || ('第' + m.q + '問');
     let rec = null;
-    try { const order = await MVDB.getOrder(); const id = order[m.q - 1]; rec = id ? await MVDB.get(id) : null; } catch (e) { rec = null; }
+    try { const id = m.id || (mvSharedList[m.q - 1] && mvSharedList[m.q - 1].id); rec = id ? await MVDB.get(id) : null; } catch (e) { rec = null; }
     if (mvKey !== key) return;
     if (!rec) {
       $('mvIntro').hidden = true; $('mvMsg').hidden = false;
-      $('mvMsg').innerHTML = '第' + m.q + '問の動画がこのPCに登録されていません<br><small>このPCの管理画面で動画を追加してください</small>';
+      $('mvMsg').innerHTML = '第' + m.q + '問の動画がこのPCに見つかりません<br><small>このPCのスクリーン画面（開始前）の「このPCに正解動画を取り込む」で動画を取り込んでください</small>';
       mvTimers.push(setTimeout(mvDone, 5000));
       return;
     }
