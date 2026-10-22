@@ -169,6 +169,8 @@
   #mvSetup { margin-top: 4vh; font-size: 2.4vh; padding: 2vh 2.4vw; border-radius: 1.4vh; background: rgba(255,255,255,.08); border: .2vh solid rgba(255,255,255,.2); text-align: center; line-height: 1.8; cursor: default; }
   #mvSetup button { font: inherit; font-size: 2.2vh; margin-left: 1vw; padding: .6vh 1.4vw; border-radius: 1vh; border: none; background: #7b2cff; color: #fff; cursor: pointer; }
   #mvImportMsg { font-size: 2vh; opacity: .85; }
+  #soundHint { position: fixed; left: 50%; bottom: 2.5vh; transform: translateX(-50%); z-index: 11; pointer-events: none;
+    font-size: 2.2vh; padding: 1vh 2.2vw; border-radius: 99px; background: rgba(0,0,0,.7); border: .2vh solid rgba(255,255,255,.3); color: #fff; opacity: .85; }
   #starter small { font-size: 2.4vh; opacity: .7; }
   #conn { position: fixed; left: 1vw; bottom: 1vh; font-size: 1.8vh; color: #ff7b7b; }
 </style>
@@ -225,11 +227,13 @@
     <div id="mvMsg" hidden></div>
   </div>
   <div id="burst" hidden><div class="bq" id="burstQ"></div><div class="bs">START!</div></div>
-  <div id="starter">クリックして開始（BGM ON）<small>ブラウザを全画面表示（F11）にしてください</small>
+  <div id="soundHint" hidden>画面を1回クリックすると、BGM・動画の音が出ます（全画面は F11）</div>
+  <div id="starter" hidden>スクリーンPCの準備（正解動画の取り込み）<small>本番で使うこのPCに、正解発表の動画を取り込みます</small>
     <div id="mvSetup">正解動画（このPCに保存済み）：<b id="mvHave">確認中…</b>
       <button id="btnMvImport">このPCに正解動画を取り込む</button>
       <input type="file" id="mvImport" accept="video/*,.mp4,.mov,.webm,.m4v" multiple hidden>
-      <div id="mvImportMsg"></div></div>
+      <div id="mvImportMsg"></div>
+      <button id="btnSetupDone" style="margin-top:2vh;background:#2fd07a;color:#052b16">準備完了 → スクリーン表示へ</button></div>
   </div>
   <div id="conn" hidden>再接続中…</div>
 
@@ -411,11 +415,31 @@ async function mvLocalIds(list) {
       $('mvImportMsg').textContent = files.length + '本を取り込みました' + (mvSharedList.length > before ? '' : '（管理画面の一覧と同じ名前の動画に割り当てました）');
     } catch (e) { $('mvImportMsg').textContent = '取り込みに失敗しました：' + (e && e.message || e); }
   });
-  $('starter').addEventListener('click', function () {
-    try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch (e) {}
-    $('starter').hidden = true;
-    audioUnlocked = true; bgmActiveKey = ''; updateBgm();
-  });
+  /* 動画の取り込みは screen.html?setup=1 で開いたときだけ表示（通常はすぐルール説明などを表示） */
+  const SETUP_MODE = /[?&]setup/.test(location.search);
+  if (SETUP_MODE) $('starter').hidden = false;
+  $('btnSetupDone').addEventListener('click', function () { location.href = location.pathname; });
+
+  /* 音の再生はブラウザの決まりで「画面を1回クリック」が必要な場合がある。
+     自動で鳴らせる場合はそのまま鳴らし、鳴らせない場合だけ小さく案内を出す。 */
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true; $('soundHint').hidden = true; bgmActiveKey = ''; updateBgm();
+  }
+  function firstGesture(e) {
+    if (SETUP_MODE && e && e.target && e.target.closest && e.target.closest('#starter')) return;
+    if (!audioUnlocked) {
+      try { if (!document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function () {}); } catch (err) {}
+    }
+    unlockAudio();
+  }
+  document.addEventListener('pointerdown', firstGesture);
+  document.addEventListener('keydown', firstGesture);
+  setTimeout(function () {   // スクリプトの読み込みがすべて終わってから判定する
+    let ok = false;
+    try { const c = new (window.AudioContext || window.webkitAudioContext)(); ok = c.state === 'running'; c.close(); } catch (e) {}
+    if (ok) unlockAudio(); else if (!SETUP_MODE) $('soundHint').hidden = false;
+  }, 0);
 
   /* ---- 終了演出 ---- */
   let finishShown = false, readyShown = false;
@@ -493,7 +517,10 @@ async function mvLocalIds(list) {
     if (key !== bgmActiveKey) {           // 画面が切り替わった → 最初から再生
       bgmActiveKey = key;
       a.currentTime = 0;
-      a.play().catch(function (e) { console.warn('BGM play', e); });
+      a.play().catch(function (e) {
+        console.warn('BGM play', e);
+        if (e && e.name === 'NotAllowedError') { audioUnlocked = false; bgmActiveKey = ''; $('soundHint').hidden = false; }
+      });
     } else if (a.paused && a.loop) {
       a.play().catch(function () {});
     }

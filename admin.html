@@ -67,13 +67,7 @@
     <button id="btnOpenScreen" class="openScreen">スクリーンを表示 ↗</button>
   </header>
 
-  <div id="login" class="card">
-    <h2>管理者パスワード</h2>
-    <div class="row"><input type="password" id="pass" placeholder="パスワード"><button id="loginBtn">ログイン</button></div>
-    <p class="muted" id="loginErr"></p>
-  </div>
-
-  <div class="wrap" id="main" hidden>
+  <div class="wrap" id="main">
     <div class="card">
       <h2>進行</h2>
       <div class="status"><span id="stRound">-</span><span id="stBadge">待機</span><span id="stTimer">0.00</span></div>
@@ -131,6 +125,7 @@
       <label><input type="checkbox" id="showQr"> スクリーンにQRコードを表示</label>
       <h2 style="margin-top:20px">URL</h2>
       <div class="url"><span style="width:80px">スクリーン</span><code id="urlScreen"></code><button data-copy="urlScreen">コピー</button><button id="btnOpenScreen2">開く</button></div>
+      <div class="url"><span style="width:80px">動画取り込み用</span><code id="urlSetup"></code><button data-copy="urlSetup">コピー</button></div>
       <div class="url"><span style="width:80px">参加者</span><code id="urlPlayer"></code><button data-copy="urlPlayer">コピー</button></div>
     </div>
 
@@ -150,7 +145,7 @@
       <h2>正解発表の動画（MV）</h2>
       <p class="muted" style="margin-top:-6px">上から順に 第1問・第2問… の正解発表で流れます。▲▼で順番を入れ替えられます。<br>
         動画ファイルはインターネットには上げず、各PCのブラウザ内に保存します。<b>スクリーンを映すPCにも動画が必要です。</b>
-        スクリーンを別のPCで映す場合は、そのPCのスクリーン画面（開始前の画面）の「このPCに正解動画を取り込む」で<b>同じファイル</b>を選んでください（ファイル名で自動的に同じ問題に割り当てられます）。
+        スクリーンを映すPCで<b>「動画取り込み用」のURL</b>（下の表示設定欄、またはこのボタン → <button id="btnOpenSetup" type="button">動画取り込み画面を開く</button>）を開き、「このPCに正解動画を取り込む」で<b>同じファイル</b>を選んでください（ファイル名で自動的に同じ問題に割り当てられます）。
         「スクリーンのPC」の列が全部 ✓ になれば準備OKです。</p>
       <input type="file" id="mvFile" accept="video/*,.mp4,.mov,.webm,.m4v" multiple hidden>
       <input type="file" id="mvReplace" accept="video/*,.mp4,.mov,.webm,.m4v" hidden>
@@ -331,8 +326,6 @@ async function mvLocalIds(list) {
 
 </script>
 <script>
-  /* ▼ 管理者パスワード（必要に応じて変更してください） */
-  const ADMIN_PASS = 'admin1234';
 
   const $ = function (id) { return document.getElementById(id); };
   const LS = {
@@ -344,21 +337,12 @@ async function mvLocalIds(list) {
 
   function toast(t) { $('toast').textContent = t; $('toast').hidden = false; clearTimeout(toast._t); toast._t = setTimeout(function () { $('toast').hidden = true; }, 2200); }
 
-  /* ---- ログイン ---- */
-  function login() {
-    let ok = false;
-    try { ok = sessionStorage.getItem('iq_admin') === '1'; } catch (e) {}
-    if (!ok && $('pass').value !== ADMIN_PASS) { if ($('pass').value) $('loginErr').textContent = 'パスワードが違います'; return; }
-    try { sessionStorage.setItem('iq_admin', '1'); } catch (e) {}
-    $('login').hidden = true; $('main').hidden = false;
-    if (!started) { started = true; startApp(); }
-  }
-  $('loginBtn').onclick = login;
-  $('pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
-  login();
+  /* ---- 起動（パスワードなし） ---- */
+  if (!started) { started = true; startApp(); }
 
   function startApp() {
     $('urlScreen').textContent = baseUrl() + 'screen.html';
+    $('urlSetup').textContent = baseUrl() + 'screen.html?setup=1';
     $('urlPlayer').textContent = baseUrl();
     $('songs').value = LS.get('iq_songs') || '';
     onConnection(function (ok) { $('conn').hidden = ok; });
@@ -498,6 +482,7 @@ async function mvLocalIds(list) {
     if (!w) toast('ポップアップがブロックされました。URL欄の「開く」かコピーしたURLで開いてください');
   }
   $('btnOpenScreen').onclick = openScreen;
+  $('btnOpenSetup').onclick = function () { const w = window.open(baseUrl() + 'screen.html?setup=1', 'introQuizScreen'); if (!w) toast('ポップアップがブロックされました'); };
   $('btnOpenScreen2').onclick = openScreen;
   $('btnFinish').onclick = function () {
     if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
