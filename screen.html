@@ -152,6 +152,8 @@
   @keyframes fall { to { transform: translateY(115vh) rotate(720deg); } }
 
   /* ===== 正解発表（MV） ===== */
+  /* MV再生中は後ろの画面（光る・回るアニメーション）を止めて、動画の再生にPCの力を集中させる */
+  body.mvon > header, body.mvon > section, body.mvon #burst, body.mvon #conn { display: none !important; }
   #mvBox { position: fixed; inset: 0; z-index: 9; background: #000; display: flex; align-items: center; justify-content: center; }
   #mvVideo { width: 100%; height: 100%; object-fit: contain; background: #000; }
   #mvIntro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vh;
@@ -221,7 +223,7 @@
   </section>
 
   <div id="mvBox" hidden>
-    <video id="mvVideo" playsinline preload="auto"></video>
+    <video id="mvVideo" playsinline preload="auto" disablepictureinpicture></video>
     <div id="mvIntro" hidden><div class="mi1">正解は…</div><div class="mi2" id="mvIntroTitle"></div></div>
     <div id="mvCap" hidden><span id="mvCapQ"></span><b id="mvCapTitle"></b></div>
     <div id="mvMsg" hidden></div>
@@ -542,7 +544,7 @@ async function mvLocalIds(list) {
   function mvHide() {
     mvClear(); mvVideo.pause(); mvVideo.removeAttribute('src'); mvVideo.load();
     if (mvUrl) { URL.revokeObjectURL(mvUrl); mvUrl = null; }
-    $('mvBox').hidden = true; mvActive = false; mvKey = null; updateBgm();
+    $('mvBox').hidden = true; document.body.classList.remove('mvon'); mvActive = false; mvKey = null; updateBgm();
   }
   function mvDone() { ROOT.child('state/mv/playing').set(false).catch(function () {}); mvHide(); }
   async function updateMv() {
@@ -553,7 +555,7 @@ async function mvLocalIds(list) {
     if (mvKey === key) return;
     mvClear(); mvKey = key; mvActive = true;
     BGM_SLOTS.forEach(function (x) { stopSlot(x, true); });
-    $('mvBox').hidden = false; $('mvMsg').hidden = true; $('mvCap').hidden = true;
+    $('mvBox').hidden = false; document.body.classList.add('mvon'); $('mvMsg').hidden = true; $('mvCap').hidden = true;
     $('mvIntro').hidden = false; $('mvIntroTitle').textContent = m.title || ('第' + m.q + '問');
     let rec = null;
     try { const id = m.id || (mvSharedList[m.q - 1] && mvSharedList[m.q - 1].id); rec = id ? await MVDB.get(id) : null; } catch (e) { rec = null; }
