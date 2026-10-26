@@ -126,7 +126,7 @@ function esc(s) {
 function sec(ms) { return (Math.max(0, ms) / 1000).toFixed(2); }
 
 function defaultState() {
-  return { title: DEFAULT_TITLE, roundNo: 0, status: 'ready', startAt: 0, endAt: 0, showQr: true, reveal: '' };
+  return { title: DEFAULT_TITLE, roundNo: 0, status: 'ready', startAt: 0, endAt: 0, showQr: true, reveal: '', prize: 0 };
 }
 
 /** teams オブジェクト → [{id, name, device, joined}] (1..TEAM_COUNT) */
@@ -224,6 +224,19 @@ async function mvLocalIds(list) {
   const have = {};
   for (const v of (list || [])) { try { if (await MVDB.get(v.id)) have[v.id] = true; } catch (e) {} }
   return have;
+}
+
+/* ---- 景品画像（第1〜PRIZE_COUNT問）：画像データはFirebaseに保存し、どのPCでも同じものを表示 ---- */
+const PRIZE_COUNT = 5;
+const PRIZE_CHUNK = 512 * 1024;
+function prizeRef(q) { return ROOT.child('bgm/prize/' + q); }
+async function prizeLoadUrl(q, meta) {
+  const d = (await prizeRef(q).child('data').once('value')).val() || {};
+  let b64 = '';
+  for (let i = 0; i < meta.chunks; i++) b64 += d[i] || '';
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: meta.type || 'image/jpeg' }));
 }
 
 </script>

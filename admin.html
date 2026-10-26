@@ -47,6 +47,13 @@
   .ready { background: #d6142a; color: #fff; font-weight: 800; border-color: #d6142a; }
   .mvplay { background: #7b2cff; color: #fff; font-weight: 800; border-color: #7b2cff; }
   .mvrow td { vertical-align: middle; }
+  .prizeRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; padding: 10px; border-radius: 10px; background: #fff3f6; }
+  .prizeRow .plabel { font-weight: 800; color: #b3123a; margin-right: 2px; }
+  .pbtn { border-color: #e9a2b4; color: #b3123a; font-weight: 700; }
+  .pbtn.cur { border-width: 2px; border-color: #d6142a; }
+  .pbtn.showing { background: #d6142a; color: #fff; border-color: #d6142a; }
+  #prizeNow { font-size: 12px; color: #b3123a; font-weight: 700; width: 100%; }
+  .pthumb { width: 96px; height: 60px; object-fit: contain; background: #f3f4f8; border-radius: 6px; display: block; }
   .finish { background: #1d2333; color: #ffd84d; font-weight: 800; border-color: #1d2333; }
   .song { margin-top: 12px; padding: 12px; background: #fff7e0; border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
   #songName { font-size: 18px; font-weight: 800; }
@@ -83,6 +90,12 @@
         <button id="btnPrev">◀ 前の問題に戻る</button>
         <button id="btnBackTo1" class="danger">第1問に戻す（チームはそのまま）</button>
         <label style="margin-left:auto"><input type="checkbox" id="kbd" checked> スペースキーでスタート/ストップ</label>
+      </div>
+      <div class="prizeRow" id="prizeRow">
+        <span class="plabel">③ 景品を表示</span>
+        <span id="prizeBtns"></span>
+        <button id="btnPrizeHide">景品を隠す</button>
+        <div id="prizeNow"></div>
       </div>
       <p class="muted">スタートを押した瞬間が 0.00 秒です。演奏の1音目と同時に押してください。参加中の全チームが押すと自動で受付終了します。</p>
       <div class="song">
@@ -139,6 +152,16 @@
         <button id="btnReset" class="danger">全リセット（参加チームも消去）</button>
       </div>
       <p class="muted">本番前に「全リセット」でダミー参加と履歴を消してください。</p>
+    </div>
+
+    <div class="card full">
+      <h2>景品の画像（第1問〜第5問）</h2>
+      <p class="muted" style="margin-top:-6px">ここでアップロードした画像が、進行欄の「③ 景品を表示」ボタンでスクリーンに映ります（第1問の画像 → 「第1問」ボタン）。
+        画像（jpg・png など）かPDF（1ページ目を画像にします）が使えます。<b>スクリーンのPCでの取り込みは不要</b>です（自動で届きます）。</p>
+      <input type="file" id="prizeFile" accept="image/*,.pdf,application/pdf" hidden>
+      <table><thead><tr><th>問題</th><th>画像</th><th>ファイル</th><th>景品名（スクリーンに表示・空欄可）</th><th></th></tr></thead>
+        <tbody id="prizeBody"></tbody></table>
+      <div id="prizeProg" class="muted" style="margin-top:6px"></div>
     </div>
 
     <div class="card full">
@@ -224,7 +247,7 @@ function esc(s) {
 function sec(ms) { return (Math.max(0, ms) / 1000).toFixed(2); }
 
 function defaultState() {
-  return { title: DEFAULT_TITLE, roundNo: 0, status: 'ready', startAt: 0, endAt: 0, showQr: true, reveal: '' };
+  return { title: DEFAULT_TITLE, roundNo: 0, status: 'ready', startAt: 0, endAt: 0, showQr: true, reveal: '', prize: 0 };
 }
 
 /** teams オブジェクト → [{id, name, device, joined}] (1..TEAM_COUNT) */
@@ -324,6 +347,19 @@ async function mvLocalIds(list) {
   return have;
 }
 
+/* ---- 景品画像（第1〜PRIZE_COUNT問）：画像データはFirebaseに保存し、どのPCでも同じものを表示 ---- */
+const PRIZE_COUNT = 5;
+const PRIZE_CHUNK = 512 * 1024;
+function prizeRef(q) { return ROOT.child('bgm/prize/' + q); }
+async function prizeLoadUrl(q, meta) {
+  const d = (await prizeRef(q).child('data').once('value')).val() || {};
+  let b64 = '';
+  for (let i = 0; i < meta.chunks; i++) b64 += d[i] || '';
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: meta.type || 'image/jpeg' }));
+}
+
 </script>
 <script>
 
@@ -418,6 +454,7 @@ async function mvLocalIds(list) {
     $('songName').textContent = song || '（曲リスト未入力）';
     $('btnReveal').disabled = s.status !== 'closed' || !song || !!s.reveal;
     renderMvControls();
+    renderPrizeControls();
     $('btnHide').disabled = !s.reveal;
 
     if (document.activeElement !== $('titleIn')) $('titleIn').value = s.title;
@@ -448,7 +485,7 @@ async function mvLocalIds(list) {
 
   function startRound() {
     if (state.status === 'open') return;
-    ROOT.child('state').update({ roundNo: (state.roundNo || 0) + 1, status: 'open', startAt: TS, endAt: 0, reveal: '', mv: null }).catch(fail);
+    ROOT.child('state').update({ roundNo: (state.roundNo || 0) + 1, status: 'open', startAt: TS, endAt: 0, reveal: '', mv: null, prize: 0 }).catch(fail);
   }
 
   async function closeRound() {
@@ -467,12 +504,12 @@ async function mvLocalIds(list) {
 
   $('btnStart').onclick = startRound;
   $('btnStop').onclick = function () { if (state.status === 'open') { closing = true; closeRound(); } };
-  $('btnReady').onclick = function () { ROOT.child('state').update({ status: 'ready', reveal: '' }).catch(fail); };
-  $('btnIdle').onclick = function () { ROOT.child('state').update({ status: 'idle', reveal: '' }).catch(fail); };
+  $('btnReady').onclick = function () { ROOT.child('state').update({ status: 'ready', reveal: '', prize: 0 }).catch(fail); };
+  $('btnIdle').onclick = function () { ROOT.child('state').update({ status: 'idle', reveal: '', prize: 0 }).catch(fail); };
   $('btnCancel').onclick = function () {
     if (!confirm('この問題の結果を破棄して、問題番号を1つ戻します。よろしいですか？')) return;
     const n = state.roundNo, u = {};
-    u['state/roundNo'] = Math.max(0, n - 1); u['state/status'] = 'idle'; u['state/reveal'] = '';
+    u['state/roundNo'] = Math.max(0, n - 1); u['state/status'] = 'idle'; u['state/reveal'] = ''; u['state/prize'] = 0;
     u['state/startAt'] = 0; u['state/endAt'] = 0;
     u['buzzes/' + n] = null; u['history/' + n] = null;
     ROOT.update(u).catch(fail);
@@ -487,7 +524,7 @@ async function mvLocalIds(list) {
   $('btnFinish').onclick = function () {
     if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
     if (!confirm('クイズを終了し、スクリーンに終了画面を表示します。よろしいですか？\n（あとから「待機画面へ」や「スタート」で再開することもできます）')) return;
-    ROOT.child('state').update({ status: 'finished', reveal: '' }).then(function () { toast('クイズ終了画面を表示しました'); }, fail);
+    ROOT.child('state').update({ status: 'finished', reveal: '', prize: 0 }).then(function () { toast('クイズ終了画面を表示しました'); }, fail);
   };
   $('btnPrev').onclick = function () {
     if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
@@ -495,7 +532,7 @@ async function mvLocalIds(list) {
     if (n < 1) return;
     if (!confirm('第' + n + '問の記録を消して、次のスタートを「第' + n + '問」にします。\n（参加チームはそのまま残ります）\n\nよろしいですか？')) return;
     const u = {};
-    u['state/roundNo'] = n - 1; u['state/status'] = 'idle'; u['state/reveal'] = '';
+    u['state/roundNo'] = n - 1; u['state/status'] = 'idle'; u['state/reveal'] = ''; u['state/prize'] = 0;
     u['state/startAt'] = 0; u['state/endAt'] = 0;
     u['buzzes/' + n] = null; u['history/' + n] = null;
     ROOT.update(u).then(function () { toast('次のスタートは第' + n + '問です'); }, fail);
@@ -504,7 +541,7 @@ async function mvLocalIds(list) {
     if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
     if (!confirm('問題番号を第1問に戻します。\n参加チームはそのまま残り、これまでの順位記録（結果履歴）は消えます。\n必要なら先に「CSVダウンロード」で保存してください。\n\nよろしいですか？')) return;
     const u = { buzzes: null, history: null };
-    u['state/roundNo'] = 0; u['state/status'] = 'idle'; u['state/reveal'] = ''; u['state/startAt'] = 0; u['state/endAt'] = 0;
+    u['state/roundNo'] = 0; u['state/status'] = 'idle'; u['state/reveal'] = ''; u['state/prize'] = 0; u['state/startAt'] = 0; u['state/endAt'] = 0;
     ROOT.update(u).then(function () { toast('第1問に戻しました'); }, fail);
   };
   document.addEventListener('keydown', function (e) {
@@ -748,11 +785,137 @@ async function mvLocalIds(list) {
     if (!v) { toast('第' + q + '問の動画が登録されていません'); return; }
     if (!mvScreenIds[v.id] && !confirm('スクリーンのPCにこの動画が見つかりません。再生を指示しますか？')) return;
     const title = songOf(q);
-    const u = { mv: { q: q, id: v.id, playing: true, ts: TS, title: title } };
+    const u = { mv: { q: q, id: v.id, playing: true, ts: TS, title: title }, prize: 0 };
     if (title) u.reveal = title;
     ROOT.child('state').update(u).catch(fail);
   };
   $('btnMvStop').onclick = function () { ROOT.child('state/mv/playing').set(false).catch(fail); };
+
+  /* ---- 景品の画像（第1〜5問） ---- */
+  var prizeMetas = {}, prizeThumbs = {}, prizeTarget = null;   // var: 起動直後の描画から参照されてもエラーにしない
+  (function buildPrize() {
+    let btns = '', rows = '';
+    for (let q = 1; q <= PRIZE_COUNT; q++) {
+      btns += '<button class="pbtn" data-pq="' + q + '">第' + q + '問</button> ';
+      rows += '<tr data-q="' + q + '"><td><b>第' + q + '問</b></td><td><img class="pthumb" alt="" hidden><span class="pnone muted">未設定</span></td>' +
+        '<td class="pname muted">—</td><td><input type="text" class="plabelIn" maxlength="40" placeholder="例）お米 5kg"></td>' +
+        '<td style="white-space:nowrap"><button class="pup">アップロード</button> <button class="ptest">プレビュー</button> <button class="pdel danger">削除</button></td></tr>';
+    }
+    $('prizeBtns').innerHTML = btns; $('prizeBody').innerHTML = rows;
+  })();
+  for (let q = 1; q <= PRIZE_COUNT; q++) {
+    prizeRef(q).child('meta').on('value', async function (snap) {
+      const m = snap.val(); prizeMetas[q] = m;
+      const tr = document.querySelector('#prizeBody tr[data-q="' + q + '"]');
+      if (!m) { if (prizeThumbs[q]) URL.revokeObjectURL(prizeThumbs[q].url); prizeThumbs[q] = null; }
+      else if (!prizeThumbs[q] || prizeThumbs[q].ver !== m.version) {
+        try { const url = await prizeLoadUrl(q, m); if (prizeThumbs[q]) URL.revokeObjectURL(prizeThumbs[q].url); prizeThumbs[q] = { ver: m.version, url: url }; } catch (e) {}
+      }
+      const img = tr.querySelector('.pthumb');
+      img.hidden = !prizeThumbs[q]; if (prizeThumbs[q]) img.src = prizeThumbs[q].url;
+      tr.querySelector('.pnone').hidden = !!m;
+      tr.querySelector('.pname').textContent = m ? m.name + '（' + (m.size / 1024).toFixed(0) + 'KB）' : '—';
+      const inp = tr.querySelector('.plabelIn');
+      if (document.activeElement !== inp) inp.value = m && m.label || '';
+      inp.disabled = !m; tr.querySelector('.pdel').disabled = !m; tr.querySelector('.ptest').disabled = !m;
+      renderPrizeControls();
+    });
+  }
+  function renderPrizeControls() {
+    const s = state, showing = Number(s.prize) || 0;
+    const cur = s.status === 'idle' || s.status === 'ready' ? 0 : s.roundNo;
+    document.querySelectorAll('#prizeBtns .pbtn').forEach(function (b) {
+      const q = Number(b.dataset.pq);
+      b.disabled = !prizeMetas[q] || s.status === 'open';
+      b.classList.toggle('showing', showing === q);
+      b.classList.toggle('cur', cur === q);
+      b.textContent = '第' + q + '問' + (showing === q ? '（表示中）' : '');
+    });
+    $('btnPrizeHide').disabled = !showing;
+    $('prizeNow').textContent = showing ? 'スクリーンに表示中：第' + showing + '問の景品' + (prizeMetas[showing] && prizeMetas[showing].label ? '「' + prizeMetas[showing].label + '」' : '')
+      : (s.status === 'open' ? '受付中は表示できません' : '');
+  }
+  $('prizeBtns').addEventListener('click', function (e) {
+    const q = Number(e.target.dataset.pq); if (!q) return;
+    if (state.status === 'open') { toast('受付中は使えません。先にストップしてください'); return; }
+    const u = { prize: q };
+    if (state.mv && state.mv.playing) u['mv/playing'] = false;   // MV再生中なら止めて景品に切り替える
+    ROOT.child('state').update(u).catch(fail);
+  });
+  $('btnPrizeHide').onclick = function () { ROOT.child('state/prize').set(0).catch(fail); };
+  $('prizeBody').addEventListener('click', function (e) {
+    const tr = e.target.closest('tr[data-q]'); if (!tr) return;
+    const q = Number(tr.dataset.q);
+    if (e.target.classList.contains('pup')) { prizeTarget = q; $('prizeFile').value = ''; $('prizeFile').click(); }
+    if (e.target.classList.contains('ptest') && prizeThumbs[q]) { const w = window.open(prizeThumbs[q].url, '_blank'); if (!w) toast('ポップアップがブロックされました'); }
+    if (e.target.classList.contains('pdel') && confirm('第' + q + '問の景品画像を削除しますか？')) {
+      const u = {}; if (Number(state.prize) === q) u['state/prize'] = 0;
+      u['bgm/prize/' + q] = null;
+      ROOT.update(u).then(function () { toast('削除しました'); }, fail);
+    }
+  });
+  $('prizeBody').addEventListener('change', function (e) {
+    if (!e.target.classList.contains('plabelIn')) return;
+    const q = Number(e.target.closest('tr').dataset.q);
+    if (prizeMetas[q]) prizeRef(q).child('meta/label').set(e.target.value.trim().slice(0, 40)).then(function () { toast('景品名を保存しました'); }, fail);
+  });
+  function loadScript(src) {
+    return new Promise(function (res, rej) { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = function () { rej(new Error('読み込み失敗: ' + src)); }; document.head.appendChild(sc); });
+  }
+  /* PDFは1ページ目を画像に変換（pdf.js を必要なときだけ読み込む） */
+  async function pdfToCanvas(file) {
+    const V = '3.11.174', B = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + V + '/';
+    if (!window.pdfjsLib) await loadScript(B + 'pdf.min.js');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = B + 'pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const page = await pdf.getPage(1);
+    const v1 = page.getViewport({ scale: 1 });
+    const scale = Math.min(4, 1920 / Math.max(v1.width, v1.height));
+    const vp = page.getViewport({ scale: scale });
+    const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    return c;
+  }
+  function imageToCanvas(file) {
+    return new Promise(function (res, rej) {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        const r = Math.min(1, 1920 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * r); c.height = Math.round(img.naturalHeight * r);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); rej(new Error('この画像形式は読み込めません（jpg・pngなどにしてください）')); };
+      img.src = url;
+    });
+  }
+  $('prizeFile').onchange = async function () {
+    const f = $('prizeFile').files[0], q = prizeTarget;
+    if (!f || !q) return;
+    const isPdf = /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name);
+    document.querySelectorAll('#prizeBody .pup').forEach(function (b) { b.disabled = true; });
+    try {
+      $('prizeProg').textContent = '第' + q + '問：' + (isPdf ? 'PDFを画像に変換中…' : '画像を準備中…');
+      const c = isPdf ? await pdfToCanvas(f) : await imageToCanvas(f);
+      const png = !isPdf && /png|gif|webp|svg/i.test(f.type);   // 透過がありそうな画像はPNGのまま
+      let dataUrl = c.toDataURL(png ? 'image/png' : 'image/jpeg', 0.9);
+      if (png && dataUrl.length > 4 * 1024 * 1024) dataUrl = c.toDataURL('image/jpeg', 0.9);
+      const type = dataUrl.slice(5, dataUrl.indexOf(';'));
+      const b64 = dataUrl.split(',')[1] || '';
+      const chunks = [];
+      for (let i = 0; i < b64.length; i += PRIZE_CHUNK) chunks.push(b64.slice(i, i + PRIZE_CHUNK));
+      const old = prizeMetas[q];
+      await prizeRef(q).child('data').remove();
+      for (let i = 0; i < chunks.length; i++) {
+        $('prizeProg').textContent = '第' + q + '問：アップロード中… ' + Math.round(i / chunks.length * 100) + '%';
+        await prizeRef(q).child('data/' + i).set(chunks[i]);
+      }
+      await prizeRef(q).child('meta').set({ name: f.name, type: type, size: Math.round(b64.length * 3 / 4), chunks: chunks.length, version: Date.now(), label: old && old.label || '' });
+      $('prizeProg').textContent = '第' + q + '問の景品画像を設定しました';
+      toast('景品画像を設定しました');
+    } catch (e) { $('prizeProg').textContent = ''; fail(e); }
+    document.querySelectorAll('#prizeBody .pup').forEach(function (b) { b.disabled = false; });
+  };
 
   /* ---- CSV ---- */
   $('btnCsv').onclick = function () {

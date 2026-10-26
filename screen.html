@@ -166,6 +166,20 @@
     font-size: 4vh; font-weight: 900; transition: opacity 1s; }
   #mvCap span { color: #ffcc33; margin-right: 1.5vw; }
   #mvMsg { position: absolute; z-index: 3; font-size: 4vh; font-weight: 900; text-align: center; padding: 0 6vw; line-height: 1.6; }
+  /* ===== 景品 ===== */
+  body.prizeon > header, body.prizeon > section, body.prizeon #burst { display: none !important; }
+  #prizeBox { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vh; padding: 3vh 4vw;
+    background: radial-gradient(ellipse at center, #3a1030 0%, #12061a 55%, #05060f 100%); }
+  #prizeBox .ph { display: flex; align-items: baseline; gap: 2vw; animation: zoomIn .6s cubic-bezier(.2,1.8,.4,1) both; }
+  #prizeBox .phq { font-size: 7vh; font-weight: 900; color: #fff; text-shadow: 0 0 2.4vh #ff2d55; }
+  #prizeBox .pht { font-size: 9vh; font-weight: 900; line-height: 1.15;
+    background: linear-gradient(180deg, #fff6b0, #ffcc33 45%, #ff6a00); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 2.4vh rgba(255,160,0,.7)); }
+  #prizeImgWrap { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; animation: zoomIn .7s cubic-bezier(.2,1.6,.4,1) .25s both; }
+  #prizeImg { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 1.6vh; border: .6vh solid #ffcc33;
+    box-shadow: 0 0 5vh rgba(255,190,40,.55), 0 2vh 6vh rgba(0,0,0,.6); background: #fff; }
+  #prizeLabel { font-size: 6vh; font-weight: 900; text-align: center; line-height: 1.25; text-shadow: 0 0 2vh rgba(255,45,85,.8); animation: zoomIn .6s ease .5s both; }
+  #prizeMsg { font-size: 4vh; font-weight: 900; opacity: .85; }
   #starter { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 2vh; font-size: 4vh; cursor: pointer; z-index: 10; }
   #mvSetup { margin-top: 4vh; font-size: 2.4vh; padding: 2vh 2.4vw; border-radius: 1.4vh; background: rgba(255,255,255,.08); border: .2vh solid rgba(255,255,255,.2); text-align: center; line-height: 1.8; cursor: default; }
@@ -227,6 +241,11 @@
     <div id="mvIntro" hidden><div class="mi1">正解は…</div><div class="mi2" id="mvIntroTitle"></div></div>
     <div id="mvCap" hidden><span id="mvCapQ"></span><b id="mvCapTitle"></b></div>
     <div id="mvMsg" hidden></div>
+  </div>
+  <div id="prizeBox" hidden>
+    <div class="ph"><span class="phq" id="prizeQ"></span><span class="pht">景品</span></div>
+    <div id="prizeImgWrap"><img id="prizeImg" alt=""><div id="prizeMsg" hidden>画像を読み込み中…</div></div>
+    <div id="prizeLabel" hidden></div>
   </div>
   <div id="burst" hidden><div class="bq" id="burstQ"></div><div class="bs">START!</div></div>
   <div id="soundHint" hidden>画面を1回クリックすると、BGM・動画の音が出ます（全画面は F11）</div>
@@ -292,7 +311,7 @@ function esc(s) {
 function sec(ms) { return (Math.max(0, ms) / 1000).toFixed(2); }
 
 function defaultState() {
-  return { title: DEFAULT_TITLE, roundNo: 0, status: 'ready', startAt: 0, endAt: 0, showQr: true, reveal: '' };
+  return { title: DEFAULT_TITLE, roundNo: 0, status: 'ready', startAt: 0, endAt: 0, showQr: true, reveal: '', prize: 0 };
 }
 
 /** teams オブジェクト → [{id, name, device, joined}] (1..TEAM_COUNT) */
@@ -390,6 +409,19 @@ async function mvLocalIds(list) {
   const have = {};
   for (const v of (list || [])) { try { if (await MVDB.get(v.id)) have[v.id] = true; } catch (e) {} }
   return have;
+}
+
+/* ---- 景品画像（第1〜PRIZE_COUNT問）：画像データはFirebaseに保存し、どのPCでも同じものを表示 ---- */
+const PRIZE_COUNT = 5;
+const PRIZE_CHUNK = 512 * 1024;
+function prizeRef(q) { return ROOT.child('bgm/prize/' + q); }
+async function prizeLoadUrl(q, meta) {
+  const d = (await prizeRef(q).child('data').once('value')).val() || {};
+  let b64 = '';
+  for (let i = 0; i < meta.chunks; i++) b64 += d[i] || '';
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: meta.type || 'image/jpeg' }));
 }
 
 </script>
@@ -584,6 +616,39 @@ async function mvLocalIds(list) {
   }
   mvVideo.addEventListener('ended', function () { if (mvActive) mvDone(); });
 
+  /* ---- 景品（画像はFirebaseから受け取る：スクリーンのPCでの取り込みは不要） ---- */
+  var prizeMeta = {}, prizeUrl = {}, prizeShown = 0, prizeShownVer = null;
+  for (let q = 1; q <= PRIZE_COUNT; q++) {
+    prizeRef(q).child('meta').on('value', async function (snap) {
+      const m = snap.val(); prizeMeta[q] = m;
+      if (!m) { if (prizeUrl[q]) URL.revokeObjectURL(prizeUrl[q].url); prizeUrl[q] = null; }
+      else if (!prizeUrl[q] || prizeUrl[q].ver !== m.version) {
+        try { const url = await prizeLoadUrl(q, m); if (prizeUrl[q]) URL.revokeObjectURL(prizeUrl[q].url); prizeUrl[q] = { ver: m.version, url: url }; }
+        catch (e) { console.error('prize load', q, e); }
+      }
+      updatePrize();
+    });
+  }
+  function updatePrize() {
+    const q = Number(state.prize) || 0;
+    if (!q) {
+      if (prizeShown) { prizeShown = 0; prizeShownVer = null; $('prizeBox').hidden = true; document.body.classList.remove('prizeon'); }
+      return;
+    }
+    const m = prizeMeta[q], u = prizeUrl[q];
+    const ver = q + ':' + (u ? u.ver : 'none') + ':' + (m && m.label || '');
+    if (prizeShown === q && prizeShownVer === ver) return;
+    const first = prizeShown !== q;
+    prizeShown = q; prizeShownVer = ver;
+    const box = $('prizeBox');
+    if (first) { box.hidden = true; void box.offsetWidth; }   // 切り替えのたびに登場アニメーション
+    box.hidden = false; document.body.classList.add('prizeon');
+    $('prizeQ').textContent = '第' + q + '問';
+    $('prizeImg').hidden = !u; if (u) $('prizeImg').src = u.url;
+    $('prizeMsg').hidden = !!u; $('prizeMsg').textContent = m ? '画像を読み込み中…' : '景品の画像が未設定です';
+    $('prizeLabel').hidden = !(m && m.label); $('prizeLabel').textContent = m && m.label || '';
+  }
+
   /* ---- スタート演出 ---- */
   function showBurst(n) {
     $('burstQ').textContent = '第' + n + '問';
@@ -616,6 +681,7 @@ async function mvLocalIds(list) {
   function render() {
     const s = state;
     updateMv();
+    updatePrize();
     updateBgm();
     $('title').textContent = s.title;
     document.title = s.title + ' - スクリーン';
