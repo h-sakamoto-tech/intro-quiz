@@ -867,7 +867,8 @@ async function prizeLoadUrl(q, meta) {
     const V = '3.11.174', B = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + V + '/';
     if (!window.pdfjsLib) await loadScript(B + 'pdf.min.js');
     pdfjsLib.GlobalWorkerOptions.workerSrc = B + 'pdf.worker.min.js';
-    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    // 日本語の文字を描くための文字対応表（cmaps）と標準フォントも読み込む（無いと日本語が消える）
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), cMapUrl: B + 'cmaps/', cMapPacked: true, standardFontDataUrl: B + 'standard_fonts/' }).promise;
     const page = await pdf.getPage(1);
     const v1 = page.getViewport({ scale: 1 });
     const scale = Math.min(4, 1920 / Math.max(v1.width, v1.height));
