@@ -179,7 +179,7 @@
 
     <div class="card full">
       <h2>BGM（画面ごとにアップロード）</h2>
-      <p class="muted" style="margin-top:-6px">音はここでアップロードした曲だけが流れます（内蔵の効果音はありません）。画面が切り替わると曲も切り替わり、毎回最初から流れます。mp3推奨・1曲15MBまで。</p>
+      <p class="muted" style="margin-top:-6px">音はここでアップロードした曲だけが流れます（内蔵の効果音はありません）。画面が切り替わると曲も切り替わり、毎回最初から流れます。「③ 景品表示画面」が未設定（または再生オフ）のときは、景品を表示しても直前の画面の曲がそのまま流れ続けます。mp3推奨・1曲15MBまで。</p>
       <input type="file" id="bgmFile" accept="audio/*,.mp3,.m4a,.wav" hidden>
       <table><thead><tr><th>流す画面</th><th>現在の曲</th><th></th><th>再生</th><th>くり返し</th><th>音量</th></tr></thead>
         <tbody id="bgmBody"></tbody></table>
@@ -615,6 +615,7 @@ async function prizeLoadUrl(q, meta) {
     { k: 'idle',   label: '② QR表示画面（参加受付）', loop: true },
     { k: 'round',  label: '第〇問（スタート〜受付中）', loop: false },
     { k: 'closed', label: '受付終了（回答タイム）', loop: true },
+    { k: 'prizebgm', label: '③ 景品表示画面', loop: true },   // 保存先は bgm/prizebgm（景品画像の bgm/prize とは別）
     { k: 'finish', label: 'クイズ終了画面', loop: true }
   ];
   const BGM_CHUNK = 512 * 1024;
